@@ -14,6 +14,23 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -649,6 +666,7 @@ th {
 }
 
 @media (max-width: 760px) {
+  /* Layout stacking */
   .topbar,
   .grid.two,
   .grid.three {
@@ -658,31 +676,145 @@ th {
   .topbar {
     align-items: stretch;
     display: grid;
+    gap: 10px;
+    padding: 12px 14px;
   }
 
+  /* Larger tap targets */
+  button,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .user-badge button,
+  .user-badge .icon-button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 10px;
+  }
+
+  /* Responsive tabs: horizontal scroll with larger buttons */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabs button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 10px 14px;
+    white-space: nowrap;
+  }
+
+  .nav-group {
+    flex-wrap: nowrap;
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  /* Improved spacing */
+  main {
+    padding: 12px;
+  }
+
+  .panel {
+    padding: 16px;
+  }
+
+  /* Tables: smaller font, wrapped cells */
   table {
     font-size: 13px;
   }
 
+  th,
+  td {
+    padding: 10px 8px;
+  }
+
+  .scroll-table.five-rows,
+  .scroll-table.ten-rows {
+    max-height: 320px;
+  }
+
+  /* Calendar: larger touch cells, simplified text */
   .calendar-header {
     display: grid;
+    gap: 10px;
+  }
+
+  .calendar-nav {
+    gap: 8px;
+  }
+
+  .calendar-nav button {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .calendar-grid {
+    gap: 4px;
   }
 
   .calendar-day {
-    min-height: 58px;
-    padding: 5px;
+    min-height: 64px;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .calendar-day strong {
+    font-size: 15px;
   }
 
   .calendar-day span {
     font-size: 10px;
+    margin-top: 4px;
   }
 
+  .calendar-legend {
+    gap: 6px;
+  }
+
+  .calendar-legend span {
+    font-size: 11px;
+  }
+
+  /* Cards */
   .booking-card-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .booking-card {
+    padding: 14px;
+  }
+
+  .booking-card-header {
+    gap: 8px;
+    margin-bottom: 12px;
   }
 
   .wallet-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wallet-summary-card {
+    padding: 14px;
+  }
+
+  .wallet-summary-card strong {
+    font-size: 22px;
   }
 
   .finance-summary-grid,
@@ -692,5 +824,95 @@ th {
 
   .search-bar {
     grid-template-columns: 1fr;
+  }
+
+  /* Modals: full-width, edge-to-edge feel on small screens */
+  .modal-backdrop {
+    padding: 0;
+    align-items: end;
+  }
+
+  .modal {
+    max-width: 100%;
+    border-radius: 12px 12px 0 0;
+    margin: 0;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+
+  .modal .booking-card-header {
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    z-index: 2;
+    padding: 16px 0;
+    margin-bottom: 8px;
+  }
+
+  /* Forms: full-width fields with comfortable spacing */
+  .field {
+    gap: 6px;
+  }
+
+  .actions {
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .actions button {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  /* Check fields */
+  .check-field {
+    gap: 10px;
+    margin: 12px 0;
+  }
+
+  .check-field input[type="checkbox"] {
+    min-height: 24px;
+    min-width: 24px;
+  }
+
+  /* Timeline */
+  .timeline-list {
+    gap: 10px;
+    padding-left: 16px;
+  }
+
+  .history-row {
+    padding: 10px;
+    border-radius: 6px;
+  }
+
+  /* Settlement summary */
+  .settlement-summary div {
+    padding: 12px;
+  }
+
+  /* Auth panel */
+  .auth-panel {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .calendar-day {
+    min-height: 52px;
+    padding: 4px;
+  }
+
+  .calendar-day strong {
+    font-size: 13px;
+  }
+
+  .calendar-day span {
+    font-size: 9px;
+  }
+
+  .tabs button {
+    padding: 8px 10px;
+    font-size: 13px;
   }
 }

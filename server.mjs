@@ -14,7 +14,10 @@ const types = {
   ".js": "text/javascript",
   ".mjs": "text/javascript",
   ".json": "application/json",
-  ".sql": "text/plain"
+  ".sql": "text/plain",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webp": "image/webp"
 };
 
 createServer(async (req, res) => {

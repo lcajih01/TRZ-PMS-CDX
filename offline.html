@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRZ PMS — Offline</title>
+    <style>
+      :root {
+        --brand: #053d25;
+        --accent: #c8a45d;
+        --bg: #f6f8f5;
+        --ink: #183128;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Arial, Helvetica, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100dvh;
+        padding: 24px;
+        text-align: center;
+      }
+      .offline-card {
+        background: white;
+        border: 1px solid #dce5df;
+        border-radius: 12px;
+        padding: 32px 24px;
+        max-width: 360px;
+        width: 100%;
+      }
+      .offline-card h1 {
+        margin: 0 0 8px;
+        color: var(--brand);
+        font-size: 22px;
+      }
+      .offline-card p {
+        margin: 0 0 20px;
+        color: #65746e;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .offline-card button {
+        background: var(--brand);
+        border: 0;
+        border-radius: 8px;
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        min-height: 48px;
+        padding: 12px 20px;
+        width: 100%;
+      }
+      .offline-logo {
+        background: var(--brand);
+        border-radius: 16px;
+        color: var(--accent);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 700;
+        height: 64px;
+        margin-bottom: 16px;
+        width: 64px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="offline-card">
+      <div class="offline-logo">TRZ</div>
+      <h1>You are offline</h1>
+      <p>TRZ PMS requires an internet connection to load booking and finance data from Supabase.</p>
+      <button onclick="location.reload()">Retry</button>
+    </div>
+  </body>
+</html>
