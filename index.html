@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRZ PMS Phase 1</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <strong>TRZ PMS</strong>
+        <span>Phase 1 Foundation</span>
+      </div>
+      <div id="userBadge" class="user-badge"></div>
+    </header>
+
+    <main>
+      <nav class="tabs" id="tabs"></nav>
+      <section id="statusMessage" class="message" hidden></section>
+      <section id="view"></section>
+    </main>
+
+    <script src="./env.js"></script>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

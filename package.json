@@ -1,0 +1,10 @@
+{
+  "name": "trz-pms-phase1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node tests/phase1.test.mjs && node tests/persistence-boundary.test.mjs"
+  }
+}
