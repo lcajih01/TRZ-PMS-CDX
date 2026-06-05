@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 
 const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const indexHtml = await readFile(new URL("../index.html", import.meta.url), "utf8");
+const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const supabase = await readFile(new URL("../src/supabase.js", import.meta.url), "utf8");
 const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
 const resendHelper = await readFile(new URL("../email/resend.mjs", import.meta.url), "utf8");
@@ -59,6 +60,14 @@ assert.ok(manifestData.icons.some((icon) => icon.src === "/icons/icon-192.png" &
 assert.ok(manifestData.icons.some((icon) => icon.src === "/icons/icon-512.png" && icon.sizes === "512x512" && icon.type === "image/png"), "PWA manifest must include 512 PNG icon");
 assert.ok(manifestData.icons.some((icon) => icon.src === "/icons/icon-maskable-512.png" && icon.purpose === "maskable" && icon.type === "image/png"), "PWA manifest must include maskable PNG icon");
 assert.ok(app.includes('navigator.serviceWorker.register("./sw.js")'), "app must register the service worker");
+assert.ok(app.includes("shortCalendarStatus"), "mobile calendar labels must be shortened without changing status logic");
+assert.ok(app.includes("shortBookingCode"), "mobile calendar labels must use compact booking codes");
+assert.ok(styles.includes("@media (max-width: 760px)"), "mobile layout rules must exist");
+assert.ok(styles.includes("min-height: 44px"), "mobile tap targets must be at least 44px");
+assert.ok(styles.includes("overflow-x: auto"), "mobile tables and panels must support horizontal scrolling");
+assert.ok(styles.includes("max-height: calc(100dvh - 16px)"), "mobile modals must fit within the viewport");
+assert.ok(styles.includes("position: sticky"), "mobile modal action footers must stay reachable");
+assert.ok(styles.includes("min-width: 640px"), "mobile tables must preserve readable columns with horizontal scroll");
 assert.ok(server.includes('".webmanifest": "application/manifest+json"'), "server must serve webmanifest MIME type");
 assert.ok(server.includes('".svg": "image/svg+xml"'), "server must serve SVG icon MIME type");
 assert.ok(serviceWorker.includes("CACHE_ASSETS"), "service worker must define an app shell cache");

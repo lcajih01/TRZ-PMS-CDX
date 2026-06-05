@@ -330,16 +330,44 @@ function calendarView() {
 
 function calendarDay(day) {
   const segments = calendarSegmentsForDay(day);
-  const label = segments[0] ? `${segments[0].booking.booking_code} ${segments[0].label}` : "Available";
+  const label = calendarDayLabel(segments[0]);
+  const fullLabel = segments[0] ? `${segments[0].booking.booking_code} ${segments[0].label}` : "Available";
   const targetAttr = segments[0]
     ? `data-open-booking="${segments[0].booking.id}"`
     : `data-open-date="${dateInputValue(day)}"`;
   return `
-    <button type="button" class="calendar-day available" ${targetAttr}>
+    <button type="button" class="calendar-day available" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${day.getDate()} ${fullLabel}`)}" ${targetAttr}>
       ${segments.map((segment) => `<i class="day-segment ${segment.kind}"></i>`).join("")}
       <strong>${day.getDate()}</strong>
       <span>${escapeHtml(label)}</span>
     </button>`;
+}
+
+function calendarDayLabel(segment) {
+  if (!segment) return "Available";
+  const full = `${segment.booking.booking_code} ${segment.label}`;
+  if (window.innerWidth > 760) return full;
+  return `${shortBookingCode(segment.booking.booking_code)} ${shortCalendarStatus(segment.label)}`;
+}
+
+function shortBookingCode(code) {
+  return String(code || "").replace(/^TRZ-\d{4}-/, "#");
+}
+
+function shortCalendarStatus(label) {
+  const labels = {
+    "Deposit Requested": "Dep. Req.",
+    "Deposit Received": "Dep. Rec.",
+    "Confirmed Check-In": "Conf. In",
+    "Confirmed Check-Out": "Conf. Out",
+    "Deposit Received Check-In": "Dep. In",
+    "Deposit Received Check-Out": "Dep. Out",
+    "Deposit Requested Check-In": "Req. In",
+    "Deposit Requested Check-Out": "Req. Out",
+    "Tentative Check-In": "Tent. In",
+    "Tentative Check-Out": "Tent. Out"
+  };
+  return labels[label] || label;
 }
 
 function calendarSegmentsForDay(day) {

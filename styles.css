@@ -649,6 +649,10 @@ th {
 }
 
 @media (max-width: 760px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .topbar,
   .grid.two,
   .grid.three {
@@ -658,23 +662,128 @@ th {
   .topbar {
     align-items: stretch;
     display: grid;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .user-badge {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  main {
+    padding: 10px;
+  }
+
+  .tabs {
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .text-link {
+    min-height: 44px;
+  }
+
+  .actions {
+    align-items: stretch;
+  }
+
+  .actions button {
+    flex: 1 1 150px;
+  }
+
+  .panel,
+  .subsection,
+  .scroll-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   table {
     font-size: 13px;
+    min-width: 640px;
   }
 
   .calendar-header {
     display: grid;
   }
 
+  .calendar-nav button {
+    flex: 1 1 105px;
+  }
+
+  .calendar-grid {
+    gap: 3px;
+  }
+
+  .calendar-weekdays {
+    font-size: 11px;
+  }
+
   .calendar-day {
-    min-height: 58px;
-    padding: 5px;
+    border-radius: 5px;
+    min-height: 64px;
+    padding: 4px;
   }
 
   .calendar-day span {
     font-size: 10px;
+    line-height: 1.2;
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  .calendar-day strong {
+    font-size: 13px;
+  }
+
+  .modal-backdrop {
+    padding: 8px;
+  }
+
+  .modal {
+    border-radius: 8px;
+    max-height: calc(100dvh - 16px);
+    max-width: none;
+    min-height: calc(100dvh - 16px);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .modal > .actions,
+  .modal > form > .actions {
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    bottom: 0;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding: 10px 14px 0;
+    position: sticky;
+    z-index: 2;
+  }
+
+  .modal .booking-card-header {
+    display: grid;
+  }
+
+  .modal .booking-card-grid {
+    gap: 10px;
+  }
+
+  .modal .subsection {
+    margin-top: 14px;
+  }
+
+  .modal table {
+    min-width: 560px;
   }
 
   .booking-card-grid {
