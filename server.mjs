@@ -15,6 +15,10 @@ const types = {
   ".js": "text/javascript",
   ".mjs": "text/javascript",
   ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
   ".sql": "text/plain"
 };
 
