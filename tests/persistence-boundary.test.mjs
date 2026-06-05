@@ -47,6 +47,14 @@ assert.ok(app.includes("Operational Cash on Hand"), "Normal View must show opera
 assert.ok(app.includes("Cash available for approved operating expenses."), "operational cash card must explain allowed use");
 assert.ok(app.includes('wallet.name.toLowerCase() === "cash"'), "operational cash card must use only the Cash wallet");
 assert.ok(app.includes("Low cash available"), "operational cash card should support a low-cash warning");
+assert.ok(app.includes("dashboard-page"), "dashboard must use the premium dashboard layout wrapper");
+assert.ok(app.includes("dashboardUpcomingArrivals"), "dashboard must show upcoming arrivals from existing booking data");
+assert.ok(app.includes("dashboardRecentActivity"), "dashboard must show recent activity from existing loaded data");
+assert.ok(app.includes("navIcon"), "navigation must support sidebar-style icon labels without changing tab logic");
+assert.ok(styles.includes(".dashboard-kpi"), "dashboard must include premium KPI card styling");
+assert.ok(styles.includes(".dashboard-content-grid"), "dashboard must include upgraded dashboard content hierarchy");
+assert.ok(styles.includes(".dashboard-list-row"), "dashboard arrivals/activity rows must be styled");
+assert.ok(styles.includes("position: fixed"), "desktop sidebar navigation styling must be present");
 assert.ok(supabase.includes("VITE_SUPABASE_URL"), "Supabase URL must come from VITE_SUPABASE_URL");
 assert.ok(supabase.includes("VITE_SUPABASE_ANON_KEY"), "Supabase anon key must come from VITE_SUPABASE_ANON_KEY");
 assert.ok(!supabase.includes("/auth/v1/token"), "Supabase Auth login must not be used in the access-code phase");

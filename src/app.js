@@ -185,7 +185,7 @@ function emptyState() {
 function render() {
   renderShell();
   if (loading) {
-    document.getElementById("view").innerHTML = `<section class="panel"><p class="muted">Loading Supabase records...</p></section>`;
+    document.getElementById("view").innerHTML = `<section class="panel loading-state"><div class="loading-spinner"></div><p>Loading resort records…</p></section>`;
     return;
   }
   if (!hasSupabaseConfig()) {
@@ -217,9 +217,13 @@ function render() {
 }
 
 function renderShell() {
+  document.body.dataset.activeTab = activeTab;
+  document.body.classList.toggle("is-locked", !isAccessUnlocked());
   const badge = document.getElementById("userBadge");
   badge.innerHTML = isAccessUnlocked()
-    ? `<span>Access unlocked${isManagerViewUnlocked() ? " / Manager View" : ""}</span><button class="icon-button" title="Unlock Manager View" data-action="unlock-manager-view">⚙</button><button data-action="lock">Lock / Logout</button>`
+    ? `<span>${isManagerViewUnlocked() ? "Manager View active" : "Normal View"}</span>
+       <button class="primary" title="Unlock Manager View" data-action="unlock-manager-view" style="font-size:11px;min-height:28px;padding:4px 10px">⚙ Manager</button>
+       <button data-action="lock" style="font-size:11px;min-height:28px;padding:4px 10px">Lock</button>`
     : `<span>Locked</span>`;
   badge.querySelector("[data-action='unlock-manager-view']")?.addEventListener("click", unlockManagerView);
   badge.querySelector("[data-action='lock']")?.addEventListener("click", () => {
@@ -247,7 +251,7 @@ function renderTabs() {
     return;
   }
   tabsEl.innerHTML = tabs
-    .map(([id, label]) => `<button class="${id === activeTab ? "active" : ""}" data-tab="${id}">${label}</button>`)
+    .map(([id, label]) => `<button class="${id === activeTab ? "active" : ""}" data-tab="${id}"><span class="nav-icon">${navIcon(id)}</span><span>${label}</span></button>`)
     .join("");
   document.querySelectorAll("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -258,40 +262,186 @@ function renderTabs() {
   });
 }
 
+function navIcon(id) {
+  const icons = {
+    dashboard: "⬡",
+    bookings: "◈",
+    finance: "₱",
+    operations: "⚙",
+    audit: "≡",
+    settings: "⊹"
+  };
+  return icons[id] || "";
+}
+
 function setupMissingView() {
   return `
-    <section class="panel">
-      <h2>Supabase Setup Required</h2>
-      <p class="muted">Business records are not stored locally. Add Supabase credentials first.</p>
-      <pre>VITE_SUPABASE_URL=
+    <div class="login-screen">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo-badge">TRZ</div>
+          <h1>Supabase Setup Required</h1>
+          <p>Add credentials to connect to the database</p>
+        </div>
+        <div class="panel">
+          <p class="muted" style="margin:0 0 14px">Business records are not stored locally. Add your Supabase credentials to the <code style="color:var(--accent);font-size:12px">.env</code> file:</p>
+          <pre>VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=</pre>
-    </section>`;
+          <p class="muted" style="font-size:12px;margin:12px 0 0">Restart the server after updating the file.</p>
+        </div>
+        <p class="login-footer">TRZ PMS &middot; ${new Date().getFullYear()}</p>
+      </div>
+    </div>`;
 }
 
 function accessCodeView() {
   const lock = getAttemptLock(pmsAttemptsKey);
   return `
-    <section class="panel auth-panel">
-      <h2>PMS Access</h2>
-      ${lock.locked ? `<p class="message">Too many wrong attempts. Try again in ${lock.minutes} minute(s).</p>` : ""}
-      <form data-action="unlock">
-        <label class="field"><span>PMS Access Code</span><input name="access_code" type="password" inputmode="numeric" required ${lock.locked ? "disabled" : ""} /></label>
-        <div class="actions"><button class="primary" ${lock.locked ? "disabled" : ""}>Enter App</button></div>
-      </form>
-    </section>`;
+    <div class="login-screen">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo-badge">TRZ</div>
+          <h1>The Resthouse Zamboanga</h1>
+          <p>Property Management System</p>
+        </div>
+        <div class="panel">
+          ${lock.locked ? `<p class="message">Too many wrong attempts. Try again in ${lock.minutes} minute(s).</p>` : ""}
+          <form data-action="unlock" class="login-form">
+            <label class="field">
+              <span>Access Code</span>
+              <input name="access_code" type="password" inputmode="numeric"
+                placeholder="Enter your access code" autocomplete="current-password"
+                required ${lock.locked ? "disabled" : ""} />
+            </label>
+            <div class="actions" style="margin-top:16px">
+              <button class="primary" style="width:100%;justify-content:center;min-height:42px;font-size:14px" ${lock.locked ? "disabled" : ""}>Enter PMS</button>
+            </div>
+          </form>
+        </div>
+        <p class="login-footer">TRZ PMS &middot; ${new Date().getFullYear()}</p>
+      </div>
+    </div>`;
 }
 
 function dashboardView() {
   const activeBookings = state.bookings.filter((booking) => !["Cancelled", "Refunded", "Archived"].includes(booking.status));
+  const today = new Date();
+  const todayArrivals = activeBookings.filter((booking) => sameLocalDate(new Date(booking.start_at), today));
+  const todayDepartures = activeBookings.filter((booking) => sameLocalDate(new Date(booking.end_at), today) && !sameLocalDate(new Date(booking.start_at), today));
+  const inHouse = activeBookings.filter((booking) => booking.status === "Checked In");
+  const upcoming = dashboardUpcomingArrivals();
+  const activity = dashboardRecentActivity();
+
+  let todayHeadline;
+  if (inHouse.length > 0) {
+    todayHeadline = `${guestNameText(inHouse[0].guest_id)} is currently in-house`;
+  } else if (todayArrivals.length > 0) {
+    todayHeadline = `${guestNameText(todayArrivals[0].guest_id)} arrives today &mdash; ${todayArrivals[0].booking_code}`;
+  } else if (upcoming.length > 0) {
+    const daysUntil = Math.max(0, Math.ceil((new Date(upcoming[0].start_at) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000));
+    todayHeadline = daysUntil === 0
+      ? `${guestNameText(upcoming[0].guest_id)} arrives today`
+      : `Next arrival in ${daysUntil} day${daysUntil === 1 ? "" : "s"} &mdash; ${escapeHtml(guestNameText(upcoming[0].guest_id))}`;
+  } else {
+    todayHeadline = "The resort is available &mdash; no upcoming bookings";
+  }
+
   return `
-    <div class="grid three">
-      <article class="panel"><h3>Total Bookings</h3><strong>${state.bookings.length}</strong><p class="muted">Loaded from Supabase.</p></article>
-      <article class="panel"><h3>Active Calendar Holds</h3><strong>${activeBookings.length}</strong><p class="muted">Whole-resort reservations only.</p></article>
-      <article class="panel"><h3>Deposit Default</h3><strong>${money(DEFAULT_SECURITY_DEPOSIT)}</strong><p class="muted">Configurable per booking.</p></article>
-    </div>
-    <div class="panel" style="margin-top:12px">
-      ${calendarView()}
-    </div>`;
+    <section class="dashboard-page">
+      <div class="dashboard-heading">
+        <div>
+          <p class="eyebrow">The Resthouse Zamboanga</p>
+          <h1>Dashboard</h1>
+        </div>
+        <span class="date-pill">${today.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
+      </div>
+
+      <div class="today-banner">
+        <div class="today-banner-content">
+          <p class="today-banner-eyebrow">Today at TRZ</p>
+          <p class="today-banner-headline">${today.toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" })} &mdash; ${todayHeadline}</p>
+        </div>
+        <div class="today-stat-row">
+          <div class="today-stat"><span>Arrivals Today</span><strong>${todayArrivals.length}</strong></div>
+          <div class="today-stat"><span>Departures</span><strong>${todayDepartures.length}</strong></div>
+          <div class="today-stat"><span>Active Holds</span><strong>${activeBookings.length}</strong></div>
+        </div>
+      </div>
+
+      <div class="dashboard-kpis">
+        <article class="dashboard-kpi"><span>Total Bookings</span><strong>${state.bookings.length}</strong><em>Loaded from Supabase</em></article>
+        <article class="dashboard-kpi"><span>Active Calendar Holds</span><strong>${activeBookings.length}</strong><em>Whole-resort reservations only</em></article>
+        <article class="dashboard-kpi"><span>Deposit Default</span><strong>${money(DEFAULT_SECURITY_DEPOSIT)}</strong><em>Configurable per booking</em></article>
+        <article class="dashboard-kpi"><span>Upcoming Arrivals</span><strong>${upcoming.length}</strong><em>Next active check-ins</em></article>
+      </div>
+
+      <div class="dashboard-content-grid">
+        <section class="dashboard-card dashboard-calendar-card">
+          ${calendarView()}
+        </section>
+        <div class="dashboard-side-stack">
+          <section class="dashboard-card">
+            <h2>Upcoming Arrivals</h2>
+            <div class="dashboard-list">
+              ${upcoming.map((booking) => {
+                const sc = bookingStatusClass(booking.status);
+                return `
+                  <article class="dashboard-list-row">
+                    <span>${formatDate(booking.start_at)}</span>
+                    <div>
+                      <strong>${guestNameText(booking.guest_id)}</strong>
+                      <em>${booking.booking_code} &mdash; ${packageNameForBooking(booking)}</em>
+                    </div>
+                    <mark class="${sc ? `pill-${sc}` : ""}">${booking.status}</mark>
+                  </article>`;
+              }).join("") || `<p class="muted" style="padding:12px 0;font-size:13px">No upcoming arrivals.</p>`}
+            </div>
+          </section>
+          <section class="dashboard-card">
+            <h2>Recent Activity</h2>
+            <div class="dashboard-list">
+              ${activity.map((item) => `
+                <article class="dashboard-list-row">
+                  <span>${formatDate(item.at)}</span>
+                  <div>
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <em>${escapeHtml(item.detail || "")}</em>
+                  </div>
+                  <mark>${escapeHtml(item.type)}</mark>
+                </article>`).join("") || `<p class="muted" style="padding:12px 0;font-size:13px">No recent activity.</p>`}
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>`;
+}
+
+function dashboardUpcomingArrivals() {
+  const now = new Date();
+  return state.bookings
+    .filter((booking) => !["Cancelled", "Refunded", "Archived", "Completed"].includes(booking.status))
+    .filter((booking) => new Date(booking.start_at) >= new Date(now.getFullYear(), now.getMonth(), now.getDate()))
+    .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+    .slice(0, 5);
+}
+
+function dashboardRecentActivity() {
+  const auditItems = state.audit_logs.map((log) => ({
+    at: log.created_at,
+    title: `${log.entity_type} ${log.action}`,
+    detail: log.reason || "",
+    type: "Audit"
+  }));
+  const ledgerItems = state.ledger_entries.slice(0, 8).map((entry) => ({
+    at: entry.created_at || entry.entry_date,
+    title: entry.description || "Transaction recorded",
+    detail: bookingCode(ledgerBookingId(entry)),
+    type: "Money"
+  }));
+  return [...auditItems, ...ledgerItems]
+    .filter((item) => item.at)
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, 5);
 }
 
 function calendarView() {
@@ -332,11 +482,12 @@ function calendarDay(day) {
   const segments = calendarSegmentsForDay(day);
   const label = calendarDayLabel(segments[0]);
   const fullLabel = segments[0] ? `${segments[0].booking.booking_code} ${segments[0].label}` : "Available";
+  const isToday = sameLocalDate(day, new Date());
   const targetAttr = segments[0]
     ? `data-open-booking="${segments[0].booking.id}"`
     : `data-open-date="${dateInputValue(day)}"`;
   return `
-    <button type="button" class="calendar-day available" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${day.getDate()} ${fullLabel}`)}" ${targetAttr}>
+    <button type="button" class="calendar-day available${isToday ? " today" : ""}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${day.getDate()} ${fullLabel}`)}" ${targetAttr}>
       ${segments.map((segment) => `<i class="day-segment ${segment.kind}"></i>`).join("")}
       <strong>${day.getDate()}</strong>
       <span>${escapeHtml(label)}</span>
@@ -459,16 +610,23 @@ function guestDirectorySection() {
 
 function bookingsView() {
   return `
-    <section class="panel">
-      <h2>New Booking / Guest</h2>
-      ${bookingForm()}
-    </section>
-    <section class="panel">
-      <h2>Monthly Booking List</h2>
-      ${bookingSearchControl()}
-      ${monthlyBookingList()}
-    </section>
-    <div style="margin-top:12px">
+    <div class="page-stack">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">Reservation Management</p>
+          <h1 class="page-title">Bookings</h1>
+        </div>
+        <span class="muted" style="font-size:13px">${state.bookings.filter((b) => !["Archived"].includes(b.status)).length} active records</span>
+      </div>
+      <section class="panel">
+        <h2>New Booking / Guest</h2>
+        ${bookingForm()}
+      </section>
+      <section class="panel">
+        <h2>Monthly Booking List</h2>
+        ${bookingSearchControl()}
+        ${monthlyBookingList()}
+      </section>
       ${guestDirectorySection()}
     </div>`;
 }
@@ -493,16 +651,39 @@ function monthlyBookingList() {
     .join("");
 }
 
+function bookingStatusClass(status) {
+  const map = {
+    "Inquiry": "inquiry",
+    "Tentative": "tentative",
+    "Deposit Requested": "deposit-requested",
+    "Deposit Received": "deposit-received",
+    "Confirmed": "confirmed",
+    "Checked In": "checked-in",
+    "Checked Out": "checked-out",
+    "Completed": "completed",
+    "Cancelled": "cancelled",
+    "Refunded": "refunded",
+    "Archived": "archived"
+  };
+  return map[status] || "";
+}
+
 function bookingCard(booking) {
   const balanceDue = packageBalanceDue(booking);
+  const sc = bookingStatusClass(booking.status);
+  const gName = guestNameText(booking.guest_id);
+  const initial = gName.charAt(0).toUpperCase();
   return `
-    <article class="booking-card">
+    <article class="booking-card${sc ? ` s-${sc}` : ""}">
       <div class="booking-card-header">
-        <div>
-          <strong>${booking.booking_code}</strong>
-          <span>${guestLinkById(booking.guest_id)}</span>
+        <div class="booking-card-header-left">
+          <div class="guest-avatar guest-avatar--sm">${initial}</div>
+          <div>
+            <strong>${booking.booking_code}</strong>
+            <span>${guestLinkById(booking.guest_id)}</span>
+          </div>
         </div>
-        <span class="pill">${booking.status}</span>
+        <span class="pill${sc ? ` pill-${sc}` : ""}">${booking.status}</span>
       </div>
       <div class="booking-card-grid">
         <div><span>Dates</span><strong>${formatRange(booking)}</strong></div>
@@ -783,40 +964,37 @@ function depositsView() {
 function financeView() {
   const showSensitive = isManagerViewUnlocked();
   return `
-    ${safeFinanceSection("Finance", () => `
-      <section class="panel">
-        <h2>Finance</h2>
-        <p class="muted">${showSensitive ? "Manager View is active. Full finance visibility is unlocked." : "Normal View is active. Sensitive finance totals are hidden."}</p>
-      </section>`)}
-    ${!showSensitive ? `<div style="margin-top:12px">
-      ${safeFinanceSection("Operational Cash", operationalCashCard)}
-    </div>` : ""}
-    ${showSensitive ? safeFinanceSection("Wallet Balances", () => `
-      <section class="panel" style="margin-top:12px">
-        <h2>Wallet Balances</h2>
-        <div class="wallet-summary-grid">
-          ${walletSummaryCards()}
+    <div class="page-stack">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">Financial Overview</p>
+          <h1 class="page-title">Finance</h1>
         </div>
-        <div class="subsection">
-          <h3>Finance Summary</h3>
-          <div class="finance-summary-grid">
-            ${financeSummaryCards()}
+        <span class="view-mode-badge${showSensitive ? " view-mode-badge--manager" : ""}">
+          ${showSensitive ? "Manager View" : "Normal View"}
+        </span>
+      </div>
+
+      ${safeFinanceSection("Finance Status", () => `
+        <p class="muted" style="font-size:13px;margin:0">${showSensitive ? "Manager View is active. Full finance visibility is unlocked." : "Normal View is active. Sensitive finance totals are hidden."}</p>
+      `)}
+
+      ${!showSensitive ? safeFinanceSection("Operational Cash", operationalCashCard) : ""}
+
+      ${showSensitive ? safeFinanceSection("Wallet Balances", () => `
+        <section class="panel">
+          <h2>Wallet Balances</h2>
+          <div class="wallet-summary-grid">${walletSummaryCards()}</div>
+          <div class="subsection">
+            <h3>Finance Summary</h3>
+            <div class="finance-summary-grid">${financeSummaryCards()}</div>
           </div>
-        </div>
-      </section>`) : ""}
-    ${showSensitive ? `<div style="margin-top:12px">
-      ${safeFinanceSection("Transactions", ledgerView)}
-    </div>` : ""}
-    <div style="margin-top:12px">
+        </section>`) : ""}
+
+      ${showSensitive ? safeFinanceSection("Transactions", ledgerView) : ""}
       ${safeFinanceSection("Expenses", expensesView)}
-    </div>
-    ${showSensitive ? `<div style="margin-top:12px">
-      ${safeFinanceSection("Owner Harvest", ownerHarvestView)}
-    </div>` : ""}
-    ${showSensitive ? `<div style="margin-top:12px">
-      ${safeFinanceSection("Transfers", transfersView)}
-    </div>` : ""}
-    <div style="margin-top:12px">
+      ${showSensitive ? safeFinanceSection("Owner Harvest", ownerHarvestView) : ""}
+      ${showSensitive ? safeFinanceSection("Transfers", transfersView) : ""}
       ${safeFinanceSection("Security Deposits", depositsView)}
     </div>`;
 }
@@ -841,28 +1019,50 @@ function operationalCashCard() {
 function financeSummaryCards() {
   const summary = financeSummary(state);
   const cards = [
-    ["This Month Revenue", summary.month_revenue],
-    ["This Month Expenses", summary.month_expenses],
-    ["This Month Net", summary.month_net],
-    ["Current Security Deposit Liability", summary.security_deposit_liability]
+    ["This Month Revenue", summary.month_revenue, ""],
+    ["This Month Expenses", summary.month_expenses, ""],
+    ["This Month Net", summary.month_net, summary.month_net >= 0 ? "text-success" : "text-danger"],
+    ["Current Security Deposit Liability", summary.security_deposit_liability, ""]
   ];
-  return cards.map(([label, value]) => `
+  return cards.map(([label, value, cls]) => `
           <article class="wallet-summary-card">
             <span>${label}</span>
-            <strong>${money(value)}</strong>
+            <strong class="${cls}">${money(value)}</strong>
           </article>`).join("");
 }
 
 function operationsView() {
+  const baseline = latestElectricityBaseline();
+  const readings = electricityReadingsForBaseline(baseline?.id);
+  const elecSummary = electricitySummary(baseline, readings[0]);
+  const totalDrinkStock = state.drink_products.filter((p) => p.is_active).reduce((total, p) => total + drinkCurrentStock(state, p.id), 0);
+  const drinkSalesToday = state.drink_sales.filter((s) => s.sale_date === todayInputValue()).reduce((t, s) => t + Number(s.sales_amount || 0), 0);
   return `
-    <section class="panel">
-      <h2>Operations</h2>
-      <p class="muted">Small operational tools for resort add-ons and utilities.</p>
-    </section>
-    <div style="margin-top:12px">
+    <div class="page-stack">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">Resort Operations</p>
+          <h1 class="page-title">Operations</h1>
+        </div>
+      </div>
+      <div class="ops-kpi-row">
+        <article class="ops-kpi-card">
+          <span>Electricity Usage</span>
+          <strong>${meterValue(elecSummary.kwh_used)} kWh</strong>
+          <em>${baseline ? `Est. ${money(elecSummary.estimated_amount)} this period` : "No baseline set yet"}</em>
+        </article>
+        <article class="ops-kpi-card">
+          <span>Drinks Stock (active)</span>
+          <strong>${formatCases(totalDrinkStock)} cases</strong>
+          <em>Total inventory on hand</em>
+        </article>
+        <article class="ops-kpi-card">
+          <span>Drink Sales Today</span>
+          <strong>${money(drinkSalesToday)}</strong>
+          <em>Revenue from drink sales</em>
+        </article>
+      </div>
       ${electricityView()}
-    </div>
-    <div style="margin-top:12px">
       ${drinksView()}
     </div>`;
 }
@@ -1074,27 +1274,44 @@ function walletSummaryCards() {
 
 function auditView() {
   return `
-    <section class="panel">
-      <h2>Audit Logs</h2>
-      <table>
-        <thead><tr><th>Time</th><th>Entity</th><th>Action</th><th>Reason</th></tr></thead>
-        <tbody>${state.audit_logs.map((log) => `<tr><td>${new Date(log.created_at).toLocaleString()}</td><td>${log.entity_type}</td><td>${log.action}</td><td>${escapeHtml(log.reason || "")}</td></tr>`).join("") || emptyRow(4)}</tbody>
-      </table>
-    </section>`;
+    <div class="page-stack">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">Security &amp; Compliance</p>
+          <h1 class="page-title">Audit Logs</h1>
+        </div>
+        <span class="muted" style="font-size:13px">${state.audit_logs.length} records</span>
+      </div>
+      <section class="panel">
+        <div class="scroll-table ten-rows">
+          <table>
+            <thead><tr><th>Time</th><th>Entity</th><th>Action</th><th>Reason</th></tr></thead>
+            <tbody>${state.audit_logs.map((log) => `
+              <tr>
+                <td style="white-space:nowrap;color:var(--muted);font-size:12px">${new Date(log.created_at).toLocaleString()}</td>
+                <td><span class="pill" style="font-size:10px">${escapeHtml(log.entity_type)}</span></td>
+                <td style="font-size:13px;font-weight:500">${escapeHtml(log.action).replaceAll("_", " ")}</td>
+                <td style="color:var(--muted);font-size:12px">${escapeHtml(log.reason || "")}</td>
+              </tr>`).join("") || `<tr><td colspan="4" class="audit-empty">No audit records yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>`;
 }
 
 function settingsView() {
   return `
-    <div>
+    <div class="page-stack">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">System Configuration</p>
+          <h1 class="page-title">Settings</h1>
+        </div>
+      </div>
       ${packagesView()}
-    </div>
-    <div style="margin-top:12px">
       ${walletsView()}
-    </div>
-    <div style="margin-top:12px">
       ${automationView()}
-    </div>
-    <div style="margin-top:12px">
       ${securitySettingsSection()}
     </div>`;
 }
@@ -1220,28 +1437,48 @@ function createBookingModal(context) {
 function bookingActionModal(context) {
   const booking = context.booking;
   const actions = bookingActionsForStatus(booking);
+  const sc = bookingStatusClass(booking.status);
+  const gName = guestNameText(booking.guest_id);
+  const initial = gName.charAt(0).toUpperCase();
+  const balanceDue = packageBalanceDue(booking);
   return `
     <div class="modal-backdrop">
       <section class="panel modal">
-        <div class="booking-card-header">
-          <div>
-            <h2>${booking.booking_code}</h2>
-            <span>${guestLinkById(booking.guest_id)} - ${guestPhone(booking.guest_id)}</span>
+
+        <!-- Header row: avatar + booking code + status + close -->
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>${booking.booking_code}</h2>
+              <span class="bm-subtitle">${guestLinkById(booking.guest_id)} &middot; ${guestPhone(booking.guest_id)}</span>
+            </div>
           </div>
-          <button type="button" data-action="close-modal">Close</button>
+          <div class="bm-header-right">
+            <span class="pill${sc ? ` pill-${sc}` : ""}">${booking.status}</span>
+            <button type="button" data-action="close-modal" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+          </div>
         </div>
-        <div class="booking-card-grid">
-          <div><span>Package</span><strong>${packageNameForBooking(booking)}</strong></div>
-          <div><span>Date Range</span><strong>${formatRange(booking)}</strong></div>
-          <div><span>Status</span><strong>${booking.status}</strong></div>
-          <div><span>Package Price</span><strong>${money(booking.base_price)}</strong></div>
-          <div><span>Revenue Paid</span><strong>${money(booking.total_revenue)}</strong></div>
-          <div><span>Balance Due</span><strong>${money(packageBalanceDue(booking))}</strong></div>
-          <div><span>Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
-          <div><span>Deposit Received</span><strong>${money(booking.total_deposit_received)}</strong></div>
-          <div><span>Deposit Refunded</span><strong>${money(booking.total_deposit_refunded)}</strong></div>
-          <div><span>Refundable Deposit</span><strong>${money(refundableDepositBalance(booking))}</strong></div>
+
+        <!-- Info grid -->
+        <div class="bm-grid">
+          <div class="bm-field"><span>Package</span><strong>${packageNameForBooking(booking)}</strong></div>
+          <div class="bm-field"><span>Date Range</span><strong>${formatRange(booking)}</strong></div>
+          <div class="bm-field"><span>Status</span><strong>${booking.status}</strong></div>
+          <div class="bm-field"><span>Package Price</span><strong>${money(booking.base_price)}</strong></div>
         </div>
+
+        <!-- Financial summary bar -->
+        <div class="bm-fin-row">
+          <div class="bm-fin-item"><span>Revenue Paid</span><strong>${money(booking.total_revenue)}</strong></div>
+          <div class="bm-fin-item${balanceDue > 0 ? " bm-fin-due" : ""}"><span>Balance Due</span><strong>${money(balanceDue)}</strong></div>
+          <div class="bm-fin-item"><span>Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
+          <div class="bm-fin-item"><span>Deposit Received</span><strong>${money(booking.total_deposit_received)}</strong></div>
+          <div class="bm-fin-item"><span>Deposit Refunded</span><strong>${money(booking.total_deposit_refunded)}</strong></div>
+          <div class="bm-fin-item"><span>Refundable Deposit</span><strong>${money(refundableDepositBalance(booking))}</strong></div>
+        </div>
+
+        <!-- Notes -->
         <div class="subsection">
           <h3>Internal Notes</h3>
           <form data-action="booking-notes">
@@ -1250,17 +1487,24 @@ function bookingActionModal(context) {
             <div class="actions"><button class="primary">Save Notes</button></div>
           </form>
         </div>
+
+        <!-- Timeline -->
         <div class="subsection">
           <h3>Booking Timeline</h3>
           ${bookingTimeline(booking)}
         </div>
+
+        <!-- Email / Automation -->
         <div class="subsection">
           <h3>Email / Automation</h3>
           ${bookingAutomationSection(booking)}
         </div>
+
+        <!-- Action buttons -->
         <div class="actions">
-          ${actions.map((action) => `<button type="button" ${action.disabled ? "disabled" : ""} data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`).join("")}
+          ${actions.map((action) => `<button type="button" ${action.disabled ? "disabled" : ""} class="${action.id === "cancel" ? "danger" : ""}" data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`).join("")}
         </div>
+
         <details class="testing-actions">
           <summary>Testing actions</summary>
           <div class="actions">
@@ -1276,31 +1520,36 @@ function guestProfileModal(context) {
   const bookings = bookingsForGuest(guest.id);
   const totalRevenue = bookings.reduce((total, booking) => total + Number(booking.total_revenue || 0), 0);
   const lastStay = [...bookings].sort((a, b) => new Date(b.end_at) - new Date(a.end_at))[0];
+  const initial = (guest.full_name || "?").charAt(0).toUpperCase();
   return `
     <div class="modal-backdrop">
       <section class="panel modal">
-        <div class="booking-card-header">
-          <div>
-            <h2>${escapeHtml(guest.full_name)}</h2>
-            <span>${escapeHtml(guest.phone)}${guest.alternate_contact_number ? ` / ${escapeHtml(guest.alternate_contact_number)}` : ""}</span>
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar guest-avatar--lg">${initial}</div>
+            <div>
+              <h2>${escapeHtml(guest.full_name)}</h2>
+              <span class="bm-subtitle">${escapeHtml(guest.phone)}${guest.alternate_contact_number ? ` &middot; ${escapeHtml(guest.alternate_contact_number)}` : ""}${guest.email ? ` &middot; ${escapeHtml(guest.email)}` : ""}</span>
+            </div>
           </div>
-          <button type="button" data-action="close-modal">Close</button>
+          <button type="button" data-action="close-modal" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
         </div>
-        <div class="booking-card-grid">
-          <div><span>Email</span><strong>${escapeHtml(guest.email || "None")}</strong></div>
-          <div><span>Total Bookings</span><strong>${bookings.length}</strong></div>
-          <div><span>Total Revenue</span><strong>${money(totalRevenue)}</strong></div>
-          <div><span>Last Stay</span><strong>${lastStay ? formatRange(lastStay) : "No stays yet"}</strong></div>
+        <div class="bm-grid">
+          <div class="bm-field"><span>Email</span><strong>${escapeHtml(guest.email || "None")}</strong></div>
+          <div class="bm-field"><span>Total Bookings</span><strong>${bookings.length}</strong></div>
+          <div class="bm-field"><span>Total Revenue</span><strong>${money(totalRevenue)}</strong></div>
+          <div class="bm-field"><span>Last Stay</span><strong>${lastStay ? formatRange(lastStay) : "No stays yet"}</strong></div>
         </div>
         <div class="subsection">
           <h3>Booking History</h3>
-          <div class="timeline-list">
-            ${bookings.map((booking) => `
+          ${bookings.map((booking) => {
+            const sc = bookingStatusClass(booking.status);
+            return `
               <button type="button" class="history-row" data-open-booking="${booking.id}">
-                <span>${booking.booking_code} - ${booking.status}</span>
-                <strong>${formatRange(booking)} / ${money(booking.total_revenue)}</strong>
-              </button>`).join("") || `<p class="muted">No bookings yet.</p>`}
-          </div>
+                <span><span class="pill pill-${sc}" style="font-size:10px">${booking.status}</span> &nbsp; ${booking.booking_code}</span>
+                <strong>${formatRange(booking)} &middot; ${money(booking.total_revenue)}</strong>
+              </button>`;
+          }).join("") || `<p class="muted" style="padding:12px 0;font-size:13px">No bookings yet.</p>`}
         </div>
       </section>
     </div>`;
@@ -1349,17 +1598,27 @@ function editBookingModal(context) {
 
 function cancelBookingModal(context) {
   const booking = context.booking;
+  const initial = guestNameText(booking.guest_id).charAt(0).toUpperCase();
   return `
     <div class="modal-backdrop">
       <section class="panel modal">
-        <h2>Cancel Booking</h2>
-        <p class="muted">${booking.booking_code} - ${guestName(booking.guest_id)}</p>
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>Cancel Booking</h2>
+              <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
+            </div>
+          </div>
+          <button type="button" data-action="close-modal" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+        </div>
+        <p class="message">This will mark the booking as Cancelled. Deposits and revenue are not automatically refunded.</p>
         <form data-action="booking-cancel">
           <input type="hidden" name="booking_id" value="${booking.id}" />
-          <label class="field"><span>Reason</span><textarea name="reason" required></textarea></label>
+          <label class="field"><span>Cancellation Reason</span><textarea name="reason" required placeholder="Reason for cancellation..."></textarea></label>
           <div class="actions">
-            <button class="primary">Confirm Cancel Booking</button>
-            <button type="button" data-action="close-modal">Cancel</button>
+            <button class="primary danger">Confirm Cancel Booking</button>
+            <button type="button" data-action="close-modal">Keep Booking</button>
           </div>
         </form>
       </section>
@@ -1425,25 +1684,36 @@ function checkoutSettlementModal(context) {
   const booking = context.booking;
   const refundable = refundableDepositBalance(booking);
   const defaultRefund = Math.max(refundable - Number(context.damage_amount || 0), 0);
+  const initial = guestNameText(booking.guest_id).charAt(0).toUpperCase();
   return `
     <div class="modal-backdrop">
       <section class="panel modal">
-        <h2>Checkout Settlement</h2>
-        <p class="muted">${booking.booking_code} - ${guestName(booking.guest_id)}</p>
-        ${booking.total_deposit_received > 0 ? "" : `<p class="message">No security deposit to refund.</p>`}
-        <div class="grid two settlement-summary">
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>Checkout Settlement</h2>
+              <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
+            </div>
+          </div>
+          <button type="button" data-action="cancel-checkout" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+        </div>
+        ${booking.total_deposit_received > 0 ? "" : `<p class="message">No security deposit on file to refund.</p>`}
+        <div class="settlement-summary">
           <div><span>Security Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
           <div><span>Security Deposit Received</span><strong>${money(booking.total_deposit_received)}</strong></div>
           <div><span>Already Refunded</span><strong>${money(booking.total_deposit_refunded)}</strong></div>
-          <div><span>Refundable Balance</span><strong>${money(refundable)}</strong></div>
+          <div><span>Refundable Balance</span><strong class="text-success">${money(refundable)}</strong></div>
         </div>
         <form data-action="checkout-settlement">
           <input type="hidden" name="booking_id" value="${booking.id}" />
-          <label class="field"><span>Damage / Penalty Deduction</span><input name="damage_amount" data-damage-amount type="number" min="0" max="${refundable}" value="0" /></label>
+          <div class="grid two">
+            <label class="field"><span>Damage / Penalty Deduction</span><input name="damage_amount" data-damage-amount type="number" min="0" max="${refundable}" value="0" /></label>
+            <label class="field"><span>Refund Amount</span><input name="refund_amount" data-refund-amount type="number" min="0" max="${refundable}" value="${defaultRefund}" /></label>
+          </div>
           <label class="field"><span>Reason / Notes</span><textarea name="reason" placeholder="Damage/Penalty Charge notes"></textarea></label>
-          <label class="field"><span>Refund Amount</span><input name="refund_amount" data-refund-amount type="number" min="0" max="${refundable}" value="${defaultRefund}" /></label>
           <label class="field"><span>Refund Wallet</span><select name="refund_wallet_id">${walletOptions()}</select></label>
-          <p class="muted">Damage/Penalty deduction is recorded as a Revenue ledger line labeled Damage/Penalty Charge. Deposit refund is recorded as a negative Security Deposit Liability line.</p>
+          <p class="muted" style="font-size:12px;margin-top:10px">Damage/Penalty deduction is recorded as a Revenue ledger line labeled Damage/Penalty Charge. Deposit refund is recorded as a negative Security Deposit Liability line.</p>
           <div class="actions">
             <button class="primary">Confirm Checkout Settlement</button>
             <button type="button" data-action="cancel-checkout">Cancel</button>
@@ -1457,18 +1727,27 @@ function checkinPaymentModal(context) {
   const booking = context.booking;
   const packageDue = packageBalanceDue(booking);
   const depositDue = depositBalanceDue(booking);
+  const initial = guestNameText(booking.guest_id).charAt(0).toUpperCase();
   return `
     <div class="modal-backdrop">
       <section class="panel modal">
-        <h2>Check-In Payment</h2>
-        <p class="muted">${booking.booking_code} - ${guestName(booking.guest_id)}</p>
-        <div class="grid two settlement-summary">
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>Check-In Payment</h2>
+              <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
+            </div>
+          </div>
+          <button type="button" data-action="cancel-checkin" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+        </div>
+        <div class="settlement-summary">
           <div><span>Package Price</span><strong>${money(booking.base_price)}</strong></div>
           <div><span>Revenue Paid</span><strong>${money(booking.total_revenue)}</strong></div>
-          <div><span>Balance Due</span><strong>${money(packageDue)}</strong></div>
+          <div><span>Balance Due</span><strong class="${packageDue > 0 ? "text-warning" : "text-success"}">${money(packageDue)}</strong></div>
           <div><span>Security Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
           <div><span>Security Deposit Received</span><strong>${money(booking.total_deposit_received)}</strong></div>
-          <div><span>Security Deposit Balance</span><strong>${money(depositDue)}</strong></div>
+          <div><span>Security Deposit Balance</span><strong class="${depositDue > 0 ? "text-warning" : "text-success"}">${money(depositDue)}</strong></div>
         </div>
         <form data-action="checkin-payment">
           <input type="hidden" name="booking_id" value="${booking.id}" />
