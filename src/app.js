@@ -1062,11 +1062,11 @@ function settingsView() {
 }
 
 function automationView() {
-  const rows = state.automation_queue;
+  const rows = state.automation_queue.filter((item) => item.automation_type === "booking_confirmation");
   return `
     <section class="panel">
       <h2>Automation Queue</h2>
-      <p class="muted">Email provider not configured. Queue records stay pending until email sending is added.</p>
+      <p class="muted">Emails send through the local server when RESEND_API_KEY is configured.</p>
       <table>
         <thead><tr><th>Type</th><th>Guest Email</th><th>Booking</th><th>Status</th><th>Scheduled</th><th>Sent</th><th>Error</th><th>Actions</th></tr></thead>
         <tbody>${rows.map((item) => `
@@ -1080,6 +1080,7 @@ function automationView() {
             <td>${escapeHtml(item.error_message || "")}</td>
             <td>
               <div class="actions">
+                <button type="button" data-automation-send="${item.id}" ${canSendAutomation(item) ? "" : "disabled"}>Send Email</button>
                 <button type="button" data-automation-id="${item.id}" data-automation-status="sent">Mark as Sent</button>
                 <button type="button" data-automation-id="${item.id}" data-automation-status="failed">Mark as Failed</button>
                 <button type="button" data-automation-id="${item.id}" data-automation-status="skipped">Skip</button>
@@ -1094,23 +1095,17 @@ function automationView() {
 function bookingAutomationSection(booking) {
   const records = automationRecordsForBooking(booking.id);
   const confirmation = records.find((item) => item.automation_type === "booking_confirmation");
-  const reminder = records.find((item) => item.automation_type === "checkin_reminder");
-  const thanks = records.find((item) => item.automation_type === "thank_you");
-  const failed = records.find((item) => item.status === "failed");
+  const failed = records.find((item) => item.automation_type === "booking_confirmation" && item.status === "failed");
   return `
     <table>
       <thead><tr><th>Email</th><th>Status</th><th>Scheduled</th><th>Sent</th></tr></thead>
       <tbody>
         ${automationStatusRow("Booking confirmation", confirmation)}
-        ${automationStatusRow("Check-in reminder", reminder)}
-        ${automationStatusRow("Thank-you", thanks)}
       </tbody>
     </table>
     <div class="actions">
-      <button type="button" data-booking-automation-action="queue-confirmation" data-booking-id="${booking.id}">Create/Queue Confirmation Email</button>
-      <button type="button" data-booking-automation-action="mark-confirmation-sent" data-booking-id="${booking.id}" ${confirmation ? "" : "disabled"}>Mark Confirmation as Sent</button>
-      <button type="button" data-booking-automation-action="skip-confirmation" data-booking-id="${booking.id}" ${confirmation ? "" : "disabled"}>Skip Confirmation</button>
-      <button type="button" data-automation-id="${failed?.id || ""}" data-automation-status="pending" ${failed ? "" : "disabled"}>Retry Failed Email</button>
+      <button type="button" data-booking-email-send="booking_confirmation" data-booking-id="${booking.id}" ${canQueueOrSendAutomation(confirmation) ? "" : "disabled"}>Send Confirmation Email</button>
+      <button type="button" data-automation-send="${failed?.id || ""}" ${failed && canSendAutomation(failed) ? "" : "disabled"}>Retry Failed Email</button>
     </div>`;
 }
 
@@ -1127,6 +1122,14 @@ function automationStatusRow(label, record) {
 function automationQueueStatus(record) {
   const ready = record.status === "pending" && new Date(record.scheduled_for) <= new Date();
   return `<span class="pill">${escapeHtml(record.status)}</span>${ready ? ` <span class="muted">Ready to send</span>` : ""}`;
+}
+
+function canSendAutomation(record) {
+  return Boolean(record?.guest_email && !["sent", "skipped"].includes(record.status));
+}
+
+function canQueueOrSendAutomation(record) {
+  return !record || canSendAutomation(record);
 }
 
 function securitySettingsSection() {
@@ -1632,27 +1635,32 @@ function bindForms() {
 }
 
 function bindAutomationActions() {
-  document.querySelectorAll("[data-booking-automation-action]").forEach((button) => {
+  document.querySelectorAll("[data-automation-send]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        button.disabled = true;
+        await sendQueuedEmail(button.dataset.automationSend);
+        await loadData();
+        showMessage("Email sent.");
+      } catch (error) {
+        await loadData();
+        showMessage(error.message);
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-booking-email-send]").forEach((button) => {
     button.addEventListener("click", async () => {
       const bookingId = button.dataset.bookingId;
-      const action = button.dataset.bookingAutomationAction;
+      const type = button.dataset.bookingEmailSend;
       try {
-        if (action === "queue-confirmation") {
-          await queueBookingAutomation(bookingId, "booking_confirmation");
-          showMessage("Confirmation email queued.");
-        }
-        if (action === "mark-confirmation-sent") {
-          await updateBookingAutomationStatus(bookingId, "booking_confirmation", "sent");
-          showMessage("Confirmation marked as sent.");
-        }
-        if (action === "skip-confirmation") {
-          await updateBookingAutomationStatus(bookingId, "booking_confirmation", "skipped", "Skipped from booking modal.");
-          showMessage("Confirmation skipped.");
-        }
+        button.disabled = true;
+        await sendBookingAutomationNow(bookingId, type);
         await loadData();
+        showMessage("Email sent.");
       } catch (error) {
+        await loadData();
         showMessage(error.message);
-        render();
       }
     });
   });
@@ -2291,17 +2299,35 @@ async function updateAutomationStatus(id, status, errorMessage = "") {
   if (!ok) throw new Error("Automation queue update failed.");
 }
 
+async function sendQueuedEmail(id) {
+  if (!id) throw new Error("Queue an email first.");
+  const response = await fetch("/api/automation/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ queue_id: id })
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Email sending failed.");
+  return data;
+}
+
+async function sendBookingAutomationNow(bookingId, type) {
+  if (type !== "booking_confirmation") throw new Error("Only booking confirmation email can be sent.");
+  await queueBookingAutomation(bookingId, type);
+  const rows = await select("automation_queue", {
+    query: `booking_id=eq.${encodeURIComponent(bookingId)}&automation_type=eq.${encodeURIComponent(type)}&limit=1`
+  });
+  const record = rows?.[0];
+  if (!record) throw new Error("Email queue record was not created.");
+  if (!canSendAutomation(record)) throw new Error("Email is already sent, skipped, or missing guest email.");
+  await sendQueuedEmail(record.id);
+}
+
 async function queueBookingAutomation(bookingId, type) {
   await rpc("queue_booking_automation", {
     input_booking_id: bookingId,
     input_type: type
   });
-}
-
-async function updateBookingAutomationStatus(bookingId, type, status, errorMessage = "") {
-  const record = automationRecordsForBooking(bookingId).find((item) => item.automation_type === type);
-  if (!record) throw new Error("Queue the email first.");
-  await updateAutomationStatus(record.id, status, errorMessage);
 }
 
 async function recordDailyClosing(fields) {
@@ -2677,9 +2703,7 @@ function drinkMovementLabel(type) {
 
 function automationTypeLabel(type) {
   const labels = {
-    booking_confirmation: "Booking Confirmation",
-    checkin_reminder: "Check-in Reminder",
-    thank_you: "Thank You"
+    booking_confirmation: "Booking Confirmation"
   };
   return labels[type] || type;
 }
