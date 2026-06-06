@@ -34,6 +34,7 @@ let checkoutSettlement = null;
 let checkinPayment = null;
 let createBookingContext = null;
 let bookingActionContext = null;
+let quickBookingContext = null;
 let guestProfileContext = null;
 let editBookingContext = null;
 let cancelBookingContext = null;
@@ -94,7 +95,7 @@ async function loadData({ silent = false } = {}) {
     state = await fetchAppState();
     stateFingerprint = appStateFingerprint(state);
   } catch (error) {
-    if (!silent) showMessage(error.message);
+    if (!silent) showMessage(error.message, "error");
     else console.warn("Auto-refresh failed.", error);
   } finally {
     loading = false;
@@ -268,6 +269,7 @@ function render() {
   if (activeTab === "operations") view.innerHTML = operationsView();
   if (activeTab === "audit") view.innerHTML = auditView();
   if (activeTab === "settings") view.innerHTML = settingsView();
+  if (quickBookingContext) view.innerHTML += quickBookingPopup(quickBookingContext);
   if (createBookingContext) view.innerHTML += createBookingModal(createBookingContext);
   if (bookingActionContext) view.innerHTML += bookingActionModal(bookingActionContext);
   if (guestProfileContext) view.innerHTML += guestProfileModal(guestProfileContext);
@@ -285,9 +287,9 @@ function renderShell() {
   document.body.classList.toggle("is-locked", !isAccessUnlocked());
   const badge = document.getElementById("userBadge");
   badge.innerHTML = isAccessUnlocked()
-    ? `<span>${isManagerViewUnlocked() ? "Manager View active" : "Normal View"}</span>
-       <button class="primary" title="Unlock Manager View" data-action="unlock-manager-view" style="font-size:11px;min-height:28px;padding:4px 10px">⚙ Manager</button>
-       <button data-action="lock" style="font-size:11px;min-height:28px;padding:4px 10px">Lock</button>`
+    ? `<span>${isManagerViewUnlocked() ? "Manager View" : "Staff View"}</span>
+       ${isManagerViewUnlocked() ? "" : `<button class="primary" title="Unlock Manager View" data-action="unlock-manager-view" style="font-size:11px;min-height:28px;padding:4px 10px">Manager View</button>`}
+       <button class="btn-close" data-action="lock" style="font-size:11px;min-height:28px;padding:4px 10px" title="Lock PMS">Lock</button>`
     : `<span>Locked</span>`;
   badge.querySelector("[data-action='unlock-manager-view']")?.addEventListener("click", unlockManagerView);
   badge.querySelector("[data-action='lock']")?.addEventListener("click", () => {
@@ -296,6 +298,7 @@ function renderShell() {
     securityUnlocked = false;
     createBookingContext = null;
     bookingActionContext = null;
+    quickBookingContext = null;
     guestProfileContext = null;
     editBookingContext = null;
     cancelBookingContext = null;
@@ -330,12 +333,12 @@ function renderTabs() {
 
 function navIcon(id) {
   const icons = {
-    dashboard: "⬡",
-    bookings: "◈",
-    finance: "₱",
-    operations: "⚙",
-    audit: "≡",
-    settings: "⊹"
+    dashboard: `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>`,
+    bookings:  `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="10" height="12" rx="1.5"/><line x1="6" y1="6" x2="10" y2="6"/><line x1="6" y1="9" x2="10" y2="9"/></svg>`,
+    finance:   `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v1.5m0 3V11m-1.5-4.5h2.25a1.25 1.25 0 0 1 0 2.5H7.5a1.25 1.25 0 0 0 0 2.5H10"/></svg>`,
+    operations:`<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1v2m0 10v2M1 8h2m10 0h2M3.22 3.22l1.42 1.42m6.72 6.72 1.42 1.42M3.22 12.78l1.42-1.42m6.72-6.72 1.42-1.42"/></svg>`,
+    audit:     `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h8M2 12h5"/></svg>`,
+    settings:  `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M13.3 7.3a1.2 1.2 0 0 0 .24-1.33l-.8-1.38a1.2 1.2 0 0 0-1.3-.56l-1.01.24a4.6 4.6 0 0 0-.78-.45L9.4 2.78A1.2 1.2 0 0 0 8.2 2h-1.6a1.2 1.2 0 0 0-1.18 1l-.15 1.02c-.28.13-.54.28-.78.45L3.47 4.23a1.2 1.2 0 0 0-1.3.56l-.8 1.38a1.2 1.2 0 0 0 .25 1.54l.8.67v.24l-.8.67a1.2 1.2 0 0 0-.25 1.54l.8 1.38c.27.46.8.68 1.3.56l1.01-.24c.24.17.5.32.78.45l.16 1.02c.14.58.66 1 1.26 1h1.6a1.2 1.2 0 0 0 1.18-1l.15-1.02c.28-.13.54-.28.78-.45l1.01.24c.5.12 1.03-.1 1.3-.56l.8-1.38a1.2 1.2 0 0 0-.24-1.54l-.8-.67v-.24l.8-.67Z"/></svg>`
   };
   return icons[id] || "";
 }
@@ -422,9 +425,9 @@ function dashboardView() {
         <span class="date-pill">${today.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</span>
       </div>
 
-      <div class="today-banner">
+      <div class="today-banner${inHouse.length > 0 ? " today-banner--occupied" : ""}">
         <div class="today-banner-content">
-          <p class="today-banner-eyebrow">Today at TRZ</p>
+          <p class="today-banner-eyebrow">${inHouse.length > 0 ? "Resort Occupied" : "Today at TRZ"}</p>
           <p class="today-banner-headline">${today.toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" })} &mdash; ${todayHeadline}</p>
         </div>
         <div class="today-stat-row">
@@ -435,9 +438,9 @@ function dashboardView() {
       </div>
 
       <div class="dashboard-kpis">
-        <article class="dashboard-kpi"><span>Total Bookings</span><strong>${state.bookings.length}</strong><em>Loaded from Supabase</em></article>
-        <article class="dashboard-kpi"><span>Active Calendar Holds</span><strong>${activeBookings.length}</strong><em>Whole-resort reservations only</em></article>
-        <article class="dashboard-kpi"><span>Deposit Default</span><strong>${money(DEFAULT_SECURITY_DEPOSIT)}</strong><em>Configurable per booking</em></article>
+        <article class="dashboard-kpi"><span>Resort Status</span><strong style="font-size:22px">${inHouse.length > 0 ? "Occupied" : "Available"}</strong><em>${inHouse.length > 0 ? `${guestNameText(inHouse[0].guest_id)} is in-house` : "No active check-ins"}</em></article>
+        <article class="dashboard-kpi"><span>Active Calendar Holds</span><strong>${activeBookings.length}</strong><em>Whole-resort reservations</em></article>
+        <article class="dashboard-kpi"><span>Total Bookings</span><strong>${state.bookings.length}</strong><em>All-time records</em></article>
         <article class="dashboard-kpi"><span>Upcoming Arrivals</span><strong>${upcoming.length}</strong><em>Next active check-ins</em></article>
       </div>
 
@@ -523,17 +526,16 @@ function calendarView() {
     <div class="calendar-header">
       <h2>${first.toLocaleString([], { month: "long", year: "numeric" })}</h2>
       <div class="calendar-nav">
-        <button type="button" data-calendar-nav="prev">Previous Month</button>
+        <button type="button" data-calendar-nav="prev">← Prev</button>
         <button type="button" data-calendar-nav="today">Today</button>
-        <button type="button" data-calendar-nav="next">Next Month</button>
+        <button type="button" data-calendar-nav="next">Next →</button>
       </div>
       <div class="calendar-legend">
-        <span><i class="available"></i>Available</span>
-        <span><i class="checkin"></i>Checked In</span>
-        <span><i class="checkout"></i>Check-Out side</span>
-        <span><i class="occupied"></i>Occupied stay</span>
-        <span><i class="history"></i>Completed history</span>
-        <span><i class="reserved"></i>Future hold</span>
+        <span><i class="ld-available"></i>Available</span>
+        <span><i class="ld-pending"></i>Pending</span>
+        <span><i class="ld-hold"></i>Confirmed</span>
+        <span><i class="ld-occupied"></i>Checked In</span>
+        <span><i class="ld-history"></i>Completed</span>
       </div>
     </div>
     <div class="calendar-grid calendar-weekdays">
@@ -544,27 +546,48 @@ function calendarView() {
     </div>`;
 }
 
-function calendarDay(day) {
-  const segments = calendarSegmentsForDay(day);
-  const label = calendarDayLabel(segments[0]);
-  const fullLabel = segments[0] ? `${segments[0].booking.booking_code} ${segments[0].label}` : "Available";
-  const isToday = sameLocalDate(day, new Date());
-  const targetAttr = segments[0]
-    ? `data-open-booking="${segments[0].booking.id}"`
-    : `data-open-date="${dateInputValue(day)}"`;
-  return `
-    <button type="button" class="calendar-day available${isToday ? " today" : ""}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${day.getDate()} ${fullLabel}`)}" ${targetAttr}>
-      ${segments.map((segment) => `<i class="day-segment ${segment.kind}"></i>`).join("")}
-      <strong>${day.getDate()}</strong>
-      <span>${escapeHtml(label)}</span>
-    </button>`;
+// Maps booking status to a CSS modifier class for full-cell background tinting.
+function calDayStatusClass(status) {
+  if (!status) return "";
+  if (status === "Checked In") return "cal-day--active";
+  if (status === "Confirmed" || status === "Deposit Received") return "cal-day--confirmed";
+  if (status === "Deposit Requested" || status === "Tentative" || status === "Inquiry") return "cal-day--pending";
+  if (status === "Completed" || status === "Checked Out") return "cal-day--completed";
+  return "";
 }
 
-function calendarDayLabel(segment) {
-  if (!segment) return "Available";
-  const full = `${segment.booking.booking_code} ${segment.label}`;
-  if (window.innerWidth > 760) return full;
-  return `${shortBookingCode(segment.booking.booking_code)} ${shortCalendarStatus(segment.label)}`;
+function calendarDay(day) {
+  // Only show a booking on its start date — end/checkout dates render as Available.
+  const segments = calendarSegmentsForDay(day).filter(
+    (s) => sameLocalDate(new Date(s.booking.start_at), day)
+  );
+  const isToday = sameLocalDate(day, new Date());
+  const todayClass = isToday ? " today" : "";
+  const dateStr = dateInputValue(day);
+  const num = day.getDate();
+  const primarySeg = segments[0] || null;
+
+  if (!primarySeg) {
+    return `
+    <button type="button" class="calendar-day${todayClass}" data-open-date="${dateStr}" aria-label="${num} Available">
+      <strong>${num}</strong>
+      <span>Available</span>
+    </button>`;
+  }
+
+  const booking = primarySeg.booking;
+  const statusClass = calDayStatusClass(booking.status);
+  const guestName = guestNameText(booking.guest_id);
+  const ref = shortBookingCode(booking.booking_code);
+  const statusLabel = shortCalendarStatus(booking.status);
+  const fullLabel = `${guestName} · ${booking.booking_code} · ${booking.status}`;
+
+  return `
+    <button type="button" class="calendar-day${statusClass ? ` ${statusClass}` : ""}${todayClass}" data-open-booking="${booking.id}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${num} ${fullLabel}`)}">
+      <strong>${num}</strong>
+      <span>${escapeHtml(guestName)}</span>
+      <span>${escapeHtml(ref)} · ${escapeHtml(statusLabel)}</span>
+    </button>`;
 }
 
 function shortBookingCode(code) {
@@ -628,10 +651,11 @@ function calendarSegmentsForDay(day) {
 }
 
 function calendarHoldKind(status) {
-  if (status === "Deposit Requested") return "deposit-requested";
-  if (status === "Tentative") return "tentative";
+  if (status === "Confirmed" || status === "Deposit Received") return "confirmed-hold";
+  if (status === "Deposit Requested" || status === "Tentative" || status === "Inquiry") return "pending";
   return "reserved";
 }
+
 
 function packagesView() {
   return `
@@ -681,6 +705,7 @@ function guestDirectorySection() {
 }
 
 function bookingsView() {
+  const activeCount = state.bookings.filter((b) => !["Archived"].includes(b.status)).length;
   return `
     <div class="page-stack">
       <div class="page-header">
@@ -688,12 +713,11 @@ function bookingsView() {
           <p class="eyebrow">Reservation Management</p>
           <h1 class="page-title">Bookings</h1>
         </div>
-        <span class="muted" style="font-size:13px">${state.bookings.filter((b) => !["Archived"].includes(b.status)).length} active records</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="muted" style="font-size:13px">${activeCount} active</span>
+          <button type="button" class="primary" data-action="new-booking" style="font-size:13px">+ New Booking</button>
+        </div>
       </div>
-      <section class="panel">
-        <h2>New Booking / Guest</h2>
-        ${bookingForm()}
-      </section>
       <section class="panel">
         <h2>Monthly Booking List</h2>
         ${bookingSearchControl()}
@@ -705,7 +729,7 @@ function bookingsView() {
 
 function monthlyBookingList() {
   const bookings = filteredBookings();
-  if (!bookings.length) return `<p class="muted">No bookings found.</p>`;
+  if (!bookings.length) return `<div class="empty-state"><strong>No bookings found</strong>${bookingSearchQuery ? "Try a different search term." : "Create the first booking with the New Booking button above."}</div>`;
   const groups = {};
   [...bookings]
     .sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
@@ -742,17 +766,18 @@ function bookingStatusClass(status) {
 
 function bookingCard(booking) {
   const balanceDue = packageBalanceDue(booking);
+  const depositDue = depositBalanceDue(booking);
   const sc = bookingStatusClass(booking.status);
   const gName = guestNameText(booking.guest_id);
   const initial = gName.charAt(0).toUpperCase();
   return `
-    <article class="booking-card${sc ? ` s-${sc}` : ""}">
+    <button type="button" class="booking-card${sc ? ` s-${sc}` : ""}" data-open-booking="${booking.id}">
       <div class="booking-card-header">
         <div class="booking-card-header-left">
           <div class="guest-avatar guest-avatar--sm">${initial}</div>
           <div>
             <strong>${booking.booking_code}</strong>
-            <span>${guestLinkById(booking.guest_id)}</span>
+            <span>${escapeHtml(gName)}</span>
           </div>
         </div>
         <span class="pill${sc ? ` pill-${sc}` : ""}">${booking.status}</span>
@@ -761,13 +786,11 @@ function bookingCard(booking) {
         <div><span>Dates</span><strong>${formatRange(booking)}</strong></div>
         <div><span>Package</span><strong>${packageNameForBooking(booking)}</strong></div>
         <div><span>Package Price</span><strong>${money(booking.base_price)}</strong></div>
-        <div><span>Revenue Paid</span><strong>${money(booking.total_revenue)}</strong></div>
-        <div><span>Balance Due</span><strong>${money(balanceDue)}</strong></div>
-        <div><span>Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
-        <div><span>Deposit Received</span><strong>${money(booking.total_deposit_received)}</strong></div>
-        <div><span>Deposit Refunded</span><strong>${money(booking.total_deposit_refunded)}</strong></div>
+        <div><span>Pax</span><strong>${booking.pax_count}</strong></div>
+        <div class="${balanceDue > 0 ? "card-field--due" : ""}"><span>Balance Due</span><strong>${money(balanceDue)}</strong></div>
+        <div class="${depositDue > 0 ? "card-field--due" : ""}"><span>Deposit Balance</span><strong>${depositDue > 0 ? `${money(depositDue)} outstanding` : "Settled"}</strong></div>
       </div>
-    </article>`;
+    </button>`;
 }
 
 function bookingSearchControl() {
@@ -783,14 +806,15 @@ function bookingSearchControl() {
 
 function bookingForm(options = {}) {
   const checkinValue = options.checkin_date || "";
+  const p = options.prefill || {};
   return `
     <form data-action="booking" data-booking-date-form>
       <label class="field"><span>Select existing guest</span><select name="guest_id"><option value="">Create new guest below</option>${state.guests.map((guest) => `<option value="${guest.id}">${escapeHtml(guest.full_name)} - ${escapeHtml(guest.phone)}</option>`).join("")}</select></label>
       <div class="subsection">
         <h3>Or Create New Guest</h3>
         <div class="grid two">
-          <label class="field"><span>Full name</span><input name="new_guest_name" /></label>
-          <label class="field"><span>Phone</span><input name="new_guest_phone" /></label>
+          <label class="field"><span>Full name</span><input name="new_guest_name" value="${escapeHtml(p.guest_name || "")}" /></label>
+          <label class="field"><span>Phone</span><input name="new_guest_phone" value="${escapeHtml(p.guest_phone || "")}" /></label>
           <label class="field"><span>Alternate contact number</span><input name="new_guest_alternate" /></label>
           <label class="field"><span>Email</span><input name="new_guest_email" type="email" /></label>
         </div>
@@ -798,7 +822,8 @@ function bookingForm(options = {}) {
       <label class="field"><span>Package</span><select name="package_version_id" data-booking-package required>${state.packages.map((pkg) => {
         const version = latestPackageVersion(pkg.id);
         if (!version) return "";
-        return `<option value="${version.id}">${escapeHtml(pkg.name)} v${version.version_number} - ${money(version.price)}</option>`;
+        const selected = p.package_version_id === version.id ? " selected" : "";
+        return `<option value="${version.id}"${selected}>${escapeHtml(pkg.name)} v${version.version_number} - ${money(version.price)}</option>`;
       }).join("")}</select></label>
       <div class="grid two">
         <label class="field"><span>Check-in date</span><input name="checkin_date" type="date" value="${checkinValue}" required /></label>
@@ -1561,12 +1586,12 @@ function createBookingModal(context) {
       <section class="panel modal">
         <div class="booking-card-header">
           <div>
-            <h2>Create New Booking</h2>
-            <span>${context.checkin_date}</span>
+            <h2>New Booking</h2>
+            ${context.checkin_date ? `<span class="muted" style="font-size:12px">${context.checkin_date}</span>` : ""}
           </div>
-          <button type="button" data-action="close-modal">Close</button>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
-        ${bookingForm({ checkin_date: context.checkin_date })}
+        ${bookingForm({ checkin_date: context.checkin_date, prefill: context.prefill })}
         <div class="subsection">
           <h3>Block Date</h3>
           <p class="muted">Reserved for a later Phase 1 cleanup. Not active yet.</p>
@@ -1582,12 +1607,20 @@ function bookingActionModal(context) {
   const sc = bookingStatusClass(booking.status);
   const gName = guestNameText(booking.guest_id);
   const initial = gName.charAt(0).toUpperCase();
-  const balanceDue = packageBalanceDue(booking);
+
+  // Prev / Next in sorted list (newest start_at first, no Archived)
+  const sorted = state.bookings
+    .filter((b) => b.status !== "Archived")
+    .sort((a, b) => new Date(b.start_at) - new Date(a.start_at));
+  const idx = sorted.findIndex((b) => b.id === booking.id);
+  const prevBooking = sorted[idx - 1] || null;
+  const nextBooking = sorted[idx + 1] || null;
+
   return `
     <div class="modal-backdrop">
       <section class="panel modal">
 
-        <!-- Header row: avatar + booking code + status + close -->
+        <!-- Header: avatar + code + status + prev/next + close -->
         <div class="bm-header">
           <div class="bm-header-left">
             <div class="guest-avatar">${initial}</div>
@@ -1598,26 +1631,26 @@ function bookingActionModal(context) {
           </div>
           <div class="bm-header-right">
             <span class="pill${sc ? ` pill-${sc}` : ""}">${booking.status}</span>
-            <button type="button" data-action="close-modal" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+            <div class="bm-nav-btns">
+              <button type="button" class="bm-nav-btn" data-booking-prev="${prevBooking?.id || ""}" ${!prevBooking ? "disabled" : ""} title="Previous booking">&#8592;</button>
+              <button type="button" class="bm-nav-btn" data-booking-next="${nextBooking?.id || ""}" ${!nextBooking ? "disabled" : ""} title="Next booking">&#8594;</button>
+            </div>
+            <button type="button" class="btn-close" data-action="close-modal">✕</button>
           </div>
         </div>
 
-        <!-- Info grid -->
-        <div class="bm-grid">
-          <div class="bm-field"><span>Package</span><strong>${packageNameForBooking(booking)}</strong></div>
-          <div class="bm-field"><span>Date Range</span><strong>${formatRange(booking)}</strong></div>
-          <div class="bm-field"><span>Status</span><strong>${booking.status}</strong></div>
-          <div class="bm-field"><span>Package Price</span><strong>${money(booking.base_price)}</strong></div>
-        </div>
+        <!-- Snapshot card -->
+        ${bookingSnapshotCard(booking)}
 
-        <!-- Financial summary bar -->
-        <div class="bm-fin-row">
-          <div class="bm-fin-item"><span>Revenue Paid</span><strong>${money(booking.total_revenue)}</strong></div>
-          <div class="bm-fin-item${balanceDue > 0 ? " bm-fin-due" : ""}"><span>Balance Due</span><strong>${money(balanceDue)}</strong></div>
-          <div class="bm-fin-item"><span>Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
-          <div class="bm-fin-item"><span>Deposit Received</span><strong>${money(booking.total_deposit_received)}</strong></div>
-          <div class="bm-fin-item"><span>Deposit Refunded</span><strong>${money(booking.total_deposit_refunded)}</strong></div>
-          <div class="bm-fin-item"><span>Refundable Deposit</span><strong>${money(refundableDepositBalance(booking))}</strong></div>
+        <!-- Smart warnings -->
+        ${bookingWarnings(booking)}
+
+        <!-- Copy buttons -->
+        <div class="bm-copy-row">
+          <button type="button" class="copy-btn" data-copy="summary" data-booking-id="${booking.id}">Copy Summary</button>
+          <button type="button" class="copy-btn" data-copy="payment" data-booking-id="${booking.id}">Copy Payment</button>
+          <button type="button" class="copy-btn" data-copy="guest" data-booking-id="${booking.id}">Copy Guest</button>
+          <button type="button" class="copy-btn" data-copy="arrival" data-booking-id="${booking.id}">Copy Arrival</button>
         </div>
 
         <!-- Notes -->
@@ -1642,8 +1675,8 @@ function bookingActionModal(context) {
           ${bookingAutomationSection(booking)}
         </div>
 
-        <!-- Action buttons -->
-        <div class="actions">
+        <!-- Sticky action buttons -->
+        <div class="bm-sticky-actions">
           ${actions.map((action) => `<button type="button" ${action.disabled ? "disabled" : ""} class="${action.id === "cancel" ? "danger" : ""}" data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`).join("")}
         </div>
 
@@ -1674,7 +1707,7 @@ function guestProfileModal(context) {
               <span class="bm-subtitle">${escapeHtml(guest.phone)}${guest.alternate_contact_number ? ` &middot; ${escapeHtml(guest.alternate_contact_number)}` : ""}${guest.email ? ` &middot; ${escapeHtml(guest.email)}` : ""}</span>
             </div>
           </div>
-          <button type="button" data-action="close-modal" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
         <div class="bm-grid">
           <div class="bm-field"><span>Email</span><strong>${escapeHtml(guest.email || "None")}</strong></div>
@@ -1708,9 +1741,9 @@ function editBookingModal(context) {
         <div class="booking-card-header">
           <div>
             <h2>Edit Booking</h2>
-            <span>${booking.booking_code}</span>
+            <span class="muted" style="font-size:12px">${booking.booking_code}</span>
           </div>
-          <button type="button" data-action="close-modal">Close</button>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
         <form data-action="booking-edit" data-booking-date-form>
           <input type="hidden" name="booking_id" value="${booking.id}" />
@@ -1752,14 +1785,14 @@ function cancelBookingModal(context) {
               <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
             </div>
           </div>
-          <button type="button" data-action="close-modal" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
         <p class="message">This will mark the booking as Cancelled. Deposits and revenue are not automatically refunded.</p>
         <form data-action="booking-cancel">
           <input type="hidden" name="booking_id" value="${booking.id}" />
-          <label class="field"><span>Cancellation Reason</span><textarea name="reason" required placeholder="Reason for cancellation..."></textarea></label>
+          <label class="field"><span>Cancellation Reason</span><textarea name="reason" required placeholder="Reason for cancellation…"></textarea></label>
           <div class="actions">
-            <button class="primary danger">Confirm Cancel Booking</button>
+            <button class="danger-button">Confirm Cancellation</button>
             <button type="button" data-action="close-modal">Keep Booking</button>
           </div>
         </form>
@@ -1777,9 +1810,9 @@ function transactionModal(context) {
         <div class="booking-card-header">
           <div>
             <h2>${context.title}</h2>
-            <span>${context.booking.booking_code} - ${guestName(context.booking.guest_id)}</span>
+            <span class="muted" style="font-size:12px">${context.booking.booking_code} · ${guestName(context.booking.guest_id)}</span>
           </div>
-          <button type="button" data-action="close-modal">Close</button>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
         <form data-action="transaction">
           <input type="hidden" name="booking_id" value="${context.booking.id}" />
@@ -1807,9 +1840,9 @@ function confirmBookingDepositModal(context) {
         <div class="booking-card-header">
           <div>
             <h2>Confirm Booking Deposit</h2>
-            <span>${booking.booking_code} - ${guestName(booking.guest_id)}</span>
+            <span class="muted" style="font-size:12px">${booking.booking_code} · ${guestName(booking.guest_id)}</span>
           </div>
-          <button type="button" data-action="close-modal">Close</button>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
         <div class="settlement-summary">
           <div><span>Security Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
@@ -1880,7 +1913,7 @@ function checkoutSettlementModal(context) {
               <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
             </div>
           </div>
-          <button type="button" data-action="cancel-checkout" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+          <button type="button" class="btn-close" data-action="cancel-checkout">✕</button>
         </div>
         ${booking.total_deposit_received > 0 ? "" : `<p class="message">No security deposit on file to refund.</p>`}
         <div class="settlement-summary">
@@ -1923,7 +1956,7 @@ function checkinPaymentModal(context) {
               <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
             </div>
           </div>
-          <button type="button" data-action="cancel-checkin" style="min-height:30px;padding:4px 10px;font-size:13px">✕</button>
+          <button type="button" class="btn-close" data-action="cancel-checkin">✕</button>
         </div>
         <div class="settlement-summary">
           <div><span>Package Price</span><strong>${money(booking.base_price)}</strong></div>
@@ -1999,7 +2032,7 @@ async function unlockManagerView() {
   }
   const lock = getAttemptLock(managerAttemptsKey);
   if (lock.locked) {
-    showMessage(`Manager settings locked. Try again in ${lock.minutes} minute(s).`);
+    showMessage(`Manager settings locked. Try again in ${lock.minutes} minute(s).`, "error");
     render();
     return;
   }
@@ -2014,14 +2047,18 @@ async function unlockManagerView() {
     resetAttempts(managerAttemptsKey);
     sessionStorage.setItem(managerViewSessionKey, "true");
     render();
-    showMessage("Manager View unlocked.");
+    showMessage("Manager View unlocked.", "success");
   } catch (error) {
-    showMessage(error.message);
+    showMessage(error.message, "error");
     render();
   }
 }
 
 function bindForms() {
+  document.querySelector("[data-action='new-booking']")?.addEventListener("click", () => {
+    createBookingContext = { checkin_date: "" };
+    render();
+  });
   hydrateBookingDateForm();
   bindDatePickerOpeners();
   hydrateCheckoutSettlementForm();
@@ -2035,8 +2072,13 @@ function bindForms() {
   bindAutomationActions();
   bindBookingActionButtons();
   bindModalBackdropClose();
+  bindCopyButtons();
+  bindBookingNavButtons();
+  bindQuickBookingPopup();
+  renderFloatingActions();
   document.querySelectorAll("form[data-action]").forEach((form) => {
     if (form.dataset.action === "unlock") return;
+    if (form.dataset.action === "quick-booking-prefill") return;
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (form.dataset.submitting === "true") return;
@@ -2104,9 +2146,9 @@ function bindForms() {
         if (!shouldRefresh) return;
         form.reset();
         await loadData();
-        showMessage(successMessage);
+        showMessage(successMessage, "success");
       } catch (error) {
-        showMessage(error.message);
+        showMessage(error.message, "error");
         render();
       } finally {
         if (form.isConnected) {
@@ -2153,10 +2195,10 @@ function bindAutomationActions() {
         button.disabled = true;
         await sendQueuedEmail(button.dataset.automationSend);
         await loadData();
-        showMessage("Email sent.");
+        showMessage("Email sent.", "success");
       } catch (error) {
         await loadData();
-        showMessage(error.message);
+        showMessage(error.message, "error");
       }
     });
   });
@@ -2169,10 +2211,10 @@ function bindAutomationActions() {
         button.disabled = true;
         await sendBookingAutomationNow(bookingId, type);
         await loadData();
-        showMessage("Email sent.");
+        showMessage("Email sent.", "success");
       } catch (error) {
         await loadData();
-        showMessage(error.message);
+        showMessage(error.message, "error");
       }
     });
   });
@@ -2190,9 +2232,9 @@ function bindAutomationActions() {
       try {
         await updateAutomationStatus(button.dataset.automationId, status, errorMessage);
         await loadData();
-        showMessage("Automation queue updated.");
+        showMessage("Automation queue updated.", "success");
       } catch (error) {
-        showMessage(error.message);
+        showMessage(error.message, "error");
         render();
       }
     });
@@ -2233,7 +2275,8 @@ function bindBookingSearch() {
 function bindCalendarActions() {
   document.querySelectorAll("[data-open-date]").forEach((button) => {
     button.addEventListener("click", () => {
-      createBookingContext = { checkin_date: button.dataset.openDate };
+      quickBookingContext = { date: button.dataset.openDate };
+      createBookingContext = null;
       bookingActionContext = null;
       render();
     });
@@ -2249,6 +2292,7 @@ function bindCalendarActions() {
     });
   });
 }
+
 
 function bindGuestActions() {
   document.querySelectorAll("[data-open-guest]").forEach((button) => {
@@ -2272,9 +2316,9 @@ function bindDrinkProductActions() {
         await update("drink_products", product.id, { is_active: !product.is_active });
         await createAudit("drink_product", product.id, product.is_active ? "set_inactive" : "set_active", product, { ...product, is_active: !product.is_active });
         await loadData();
-        showMessage("Drink product updated.");
+        showMessage("Drink product updated.", "success");
       } catch (error) {
-        showMessage(error.message);
+        showMessage(error.message, "error");
         render();
       }
     });
@@ -2304,7 +2348,7 @@ function bindReversalActions() {
   document.querySelectorAll("[data-reverse-entry]").forEach((button) => {
     button.addEventListener("click", async () => {
       if (!isManagerViewUnlocked()) {
-        showMessage("Manager View is required for transaction reversals.");
+        showMessage("Manager View is required for transaction reversals.", "error");
         return;
       }
       const entry = state.ledger_entries.find((item) => item.id === button.dataset.reverseEntry);
@@ -2313,15 +2357,15 @@ function bindReversalActions() {
       if (!managerCode) return;
       const reason = window.prompt("Enter reversal reason");
       if (!reason?.trim()) {
-        showMessage("Reversal reason is required.");
+        showMessage("Reversal reason is required.", "error");
         return;
       }
       try {
         await reverseLedgerEntry(entry, managerCode, reason);
         await loadData();
-        showMessage("Transaction reversed.");
+        showMessage("Transaction reversed.", "success");
       } catch (error) {
-        showMessage(error.message);
+        showMessage(error.message, "error");
       }
     });
   });
@@ -2381,7 +2425,7 @@ function bindBookingActionButtons() {
           await deleteBookingForTesting(booking);
         }
       } catch (error) {
-        showMessage(error.message);
+        showMessage(error.message, "error");
       }
     });
   });
@@ -2557,6 +2601,7 @@ function bindModalBackdropClose() {
 function closeAllModals() {
   createBookingContext = null;
   bookingActionContext = null;
+  quickBookingContext = null;
   guestProfileContext = null;
   editBookingContext = null;
   cancelBookingContext = null;
@@ -2602,7 +2647,7 @@ async function archiveBooking(booking) {
   await createAudit("booking", booking.id, "status_change", booking, after, "Booking archived");
   bookingActionContext = null;
   await loadData();
-  showMessage("Booking archived.");
+  showMessage("Booking archived.", "success");
 }
 
 async function createWallet(fields) {
@@ -2741,7 +2786,7 @@ async function deleteBookingForTesting(booking) {
 
   bookingActionContext = null;
   await loadData();
-  showMessage("Booking deleted.");
+  showMessage("Booking deleted.", "success");
 }
 
 async function recordLedger(fields) {
@@ -3630,17 +3675,18 @@ function formatDate(value) {
 }
 
 function emptyRow(columns) {
-  return `<tr><td colspan="${columns}" class="muted">No records yet.</td></tr>`;
+  return `<tr><td colspan="${columns}" style="padding:24px 8px;text-align:center;color:var(--muted);font-size:12px">No records yet</td></tr>`;
 }
 
-function showMessage(message) {
+function showMessage(message, type = "") {
   const el = document.getElementById("statusMessage");
   el.textContent = message;
+  el.className = `message${type === "error" ? " message--error" : type === "success" ? " message--success" : ""}`;
   el.hidden = false;
   clearTimeout(showMessage.timer);
   showMessage.timer = setTimeout(() => {
     el.hidden = true;
-  }, 4500);
+  }, 5000);
 }
 
 function escapeHtml(value) {
@@ -3649,4 +3695,273 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+// ── Feature 1: Booking Snapshot Card ──────────────────────────────
+
+function bookingSnapshotCard(booking) {
+  const balanceDue = packageBalanceDue(booking);
+  const depStatus = depositDisplayStatus(booking);
+  const checkin = formatDate(booking.start_at);
+  const checkout = formatDate(booking.end_at);
+  return `
+    <div class="bm-snapshot">
+      <div class="bm-snap-item"><span>Check-in</span><strong>${escapeHtml(checkin)}</strong></div>
+      <div class="bm-snap-item"><span>Check-out</span><strong>${escapeHtml(checkout)}</strong></div>
+      <div class="bm-snap-item"><span>Guests</span><strong>${booking.pax_count}</strong></div>
+      <div class="bm-snap-item"><span>Package</span><strong>${escapeHtml(packageNameForBooking(booking))}</strong></div>
+      <div class="bm-snap-item"><span>Total</span><strong>${money(booking.base_price)}</strong></div>
+      <div class="bm-snap-item"><span>Paid</span><strong>${money(booking.total_revenue)}</strong></div>
+      <div class="bm-snap-item${balanceDue > 0 ? " bm-snap-due" : ""}"><span>Balance</span><strong>${money(balanceDue)}</strong></div>
+      <div class="bm-snap-item"><span>Deposit</span><strong>${escapeHtml(depStatus)}</strong></div>
+    </div>`;
+}
+
+// ── Feature 2: Smart Warnings ──────────────────────────────────────
+
+function bookingWarnings(booking) {
+  const warnings = [];
+  const balanceDue = packageBalanceDue(booking);
+  const depDue = depositBalanceDue(booking);
+  const guest = state.guests.find((g) => g.id === booking.guest_id);
+
+  if (balanceDue > 0) {
+    warnings.push(`Balance of ${money(balanceDue)} is unpaid.`);
+  }
+  if (depDue > 0 && Number(booking.security_deposit_amount) > 0) {
+    warnings.push(`Security deposit is missing or partial — ${money(depDue)} outstanding.`);
+  }
+  if (guest && !guest.email) {
+    warnings.push("Guest has no email address on file.");
+  }
+  if (booking.status === "Deposit Requested") {
+    warnings.push("Booking is still Deposit Requested — not yet confirmed.");
+  }
+  if (booking.status === "Confirmed") {
+    const records = automationRecordsForBooking(booking.id);
+    const confirmation = records.find((r) => r.automation_type === "booking_confirmation");
+    if (!confirmation) {
+      warnings.push("Confirmation email has not been queued or sent.");
+    } else if (confirmation.status === "failed") {
+      warnings.push("Confirmation email failed to send — retry required.");
+    }
+  }
+
+  if (!warnings.length) return "";
+  return `
+    <div class="bm-warnings">
+      ${warnings.map((w) => `<div class="bm-warning">&#9888; ${escapeHtml(w)}</div>`).join("")}
+    </div>`;
+}
+
+// ── Feature 4: Copy Buttons ────────────────────────────────────────
+
+function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showMessage("Copied to clipboard.", "success"),
+      () => showMessage("Copy failed — clipboard unavailable.", "error")
+    );
+  } else {
+    showMessage("Clipboard not available in this browser.", "error");
+  }
+}
+
+function bookingCopyText(bookingId, type) {
+  const booking = state.bookings.find((b) => b.id === bookingId);
+  if (!booking) return;
+  const guest = state.guests.find((g) => g.id === booking.guest_id);
+  const gName = guestNameText(booking.guest_id);
+  const balanceDue = packageBalanceDue(booking);
+  const pkg = packageNameForBooking(booking);
+  const checkin = formatDate(booking.start_at);
+  const checkout = formatDate(booking.end_at);
+
+  if (type === "summary") {
+    copyText([
+      `Booking Summary`,
+      `Reference: ${booking.booking_code}`,
+      `Guest: ${gName}`,
+      `Package: ${pkg}`,
+      `Check-in: ${checkin}`,
+      `Check-out: ${checkout}`,
+      `Guests: ${booking.pax_count}`,
+      `Status: ${booking.status}`,
+      `Total: ${money(booking.base_price)}`,
+      `Paid: ${money(booking.total_revenue)}`,
+      `Balance Due: ${money(balanceDue)}`,
+      `Deposit: ${depositDisplayStatus(booking)}`
+    ].join("\n"));
+  } else if (type === "payment") {
+    copyText([
+      `Payment Instructions — ${booking.booking_code}`,
+      `Guest: ${gName}`,
+      `Balance Due: ${money(balanceDue)}`,
+      `Please settle the balance before check-in.`,
+      `Contact TRZ for payment details.`
+    ].join("\n"));
+  } else if (type === "guest") {
+    copyText([
+      `Guest: ${gName}`,
+      `Phone: ${guest?.phone || "N/A"}`,
+      `Alt: ${guest?.alternate_contact_number || "N/A"}`,
+      `Email: ${guest?.email || "N/A"}`
+    ].join("\n"));
+  } else if (type === "arrival") {
+    copyText([
+      `Arrival Details — ${booking.booking_code}`,
+      `Guest: ${gName}`,
+      `Check-in: ${checkin}`,
+      `The Resthouse Zamboanga`,
+      `Please inform us of your arrival time in advance.`
+    ].join("\n"));
+  }
+}
+
+function bindCopyButtons() {
+  document.querySelectorAll("[data-copy]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      bookingCopyText(btn.dataset.bookingId, btn.dataset.copy);
+    });
+  });
+}
+
+// ── Feature 5: Prev / Next Booking Navigation ──────────────────────
+
+function bindBookingNavButtons() {
+  document.querySelectorAll("[data-booking-prev]").forEach((btn) => {
+    if (!btn.dataset.bookingPrev) return;
+    btn.addEventListener("click", () => {
+      const booking = state.bookings.find((b) => b.id === btn.dataset.bookingPrev);
+      if (!booking) return;
+      bookingActionContext = { booking };
+      render();
+    });
+  });
+  document.querySelectorAll("[data-booking-next]").forEach((btn) => {
+    if (!btn.dataset.bookingNext) return;
+    btn.addEventListener("click", () => {
+      const booking = state.bookings.find((b) => b.id === btn.dataset.bookingNext);
+      if (!booking) return;
+      bookingActionContext = { booking };
+      render();
+    });
+  });
+}
+
+// ── Feature 6: Floating Quick Actions ─────────────────────────────
+
+function renderFloatingActions() {
+  document.getElementById("trz-fab")?.remove();
+  if (!isAccessUnlocked()) return;
+
+  const fab = document.createElement("div");
+  fab.id = "trz-fab";
+  fab.innerHTML = `
+    <button type="button" id="trz-fab-toggle" title="Quick actions" aria-label="Quick actions">+</button>
+    <div id="trz-fab-menu" hidden>
+      <button type="button" data-fab-action="new-booking">New Booking</button>
+      <button type="button" data-fab-action="go-bookings">Go to Bookings</button>
+      <button type="button" data-fab-action="checkin-today">Check In Today</button>
+      <button type="button" data-fab-action="checkout-today">Check Out Today</button>
+    </div>`;
+  document.body.appendChild(fab);
+
+  fab.querySelector("#trz-fab-toggle").addEventListener("click", () => {
+    const menu = fab.querySelector("#trz-fab-menu");
+    menu.hidden = !menu.hidden;
+    fab.querySelector("#trz-fab-toggle").textContent = menu.hidden ? "+" : "✕";
+  });
+
+  fab.querySelectorAll("[data-fab-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      fab.querySelector("#trz-fab-menu").hidden = true;
+      fab.querySelector("#trz-fab-toggle").textContent = "+";
+      const action = btn.dataset.fabAction;
+      if (action === "new-booking") {
+        createBookingContext = { checkin_date: "" };
+        quickBookingContext = null;
+        bookingActionContext = null;
+        render();
+      } else if (action === "go-bookings") {
+        activeTab = "bookings";
+        render();
+      } else if (action === "checkin-today") {
+        const today = new Date();
+        const booking = state.bookings.find(
+          (b) => sameLocalDate(new Date(b.start_at), today) &&
+                 !["Checked In", "Completed", "Cancelled", "Archived", "Refunded"].includes(b.status)
+        );
+        if (booking) {
+          bookingActionContext = { booking };
+          createBookingContext = null;
+          quickBookingContext = null;
+          render();
+        } else {
+          showMessage("No check-in due today.", "");
+        }
+      } else if (action === "checkout-today") {
+        const booking = state.bookings.find((b) => b.status === "Checked In");
+        if (booking) {
+          bookingActionContext = { booking };
+          createBookingContext = null;
+          quickBookingContext = null;
+          render();
+        } else {
+          showMessage("No guest is currently checked in.", "");
+        }
+      }
+    });
+  });
+}
+
+// ── Feature 7: Quick Booking Popup ────────────────────────────────
+
+function quickBookingPopup(context) {
+  const packageOptions = state.packages.map((pkg) => {
+    const version = latestPackageVersion(pkg.id);
+    if (!version) return "";
+    return `<option value="${version.id}">${escapeHtml(pkg.name)} v${version.version_number} — ${money(version.price)}</option>`;
+  }).join("");
+
+  return `
+    <div class="modal-backdrop">
+      <section class="panel modal quick-popup">
+        <div class="bm-header">
+          <div>
+            <h2>Quick Booking</h2>
+            <span class="bm-subtitle">${escapeHtml(context.date)}</span>
+          </div>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin:0 0 16px">Fill in the basics, then continue to the full booking form.</p>
+        <form data-action="quick-booking-prefill">
+          <input type="hidden" name="date" value="${escapeHtml(context.date)}" />
+          <label class="field"><span>Guest Name</span><input name="guest_name" required /></label>
+          <label class="field"><span>Contact Number</span><input name="guest_phone" type="tel" required /></label>
+          <label class="field"><span>Package</span><select name="package_version_id">${packageOptions}</select></label>
+          <div class="actions">
+            <button class="primary">Continue to Full Booking</button>
+            <button type="button" data-action="close-modal">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>`;
+}
+
+function bindQuickBookingPopup() {
+  document.querySelector("[data-action='quick-booking-prefill']")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fields = Object.fromEntries(new FormData(e.currentTarget).entries());
+    quickBookingContext = null;
+    createBookingContext = {
+      checkin_date: fields.date,
+      prefill: {
+        guest_name: fields.guest_name,
+        guest_phone: fields.guest_phone,
+        package_version_id: fields.package_version_id
+      }
+    };
+    render();
+  });
 }

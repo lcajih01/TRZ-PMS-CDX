@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "trz-pms",
+      "name": "trz-pms-phase1",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server.mjs"],
+      "runtimeArgs": ["C:\\Users\\luen0\\Documents\\Codex\\2026-06-04\\files-mentioned-by-the-user-pasted\\outputs\\trz-pms-phase1\\server.mjs"],
       "env": { "PORT": "5174" },
       "port": 5174
     }
