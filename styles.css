@@ -1235,6 +1235,116 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
 /* Feature 7: Quick Booking Popup */
 .quick-popup { max-width: 420px; }
 
+/* ─── Post-Stay Email Section (Phase 6B) ─────────────────────────── */
+
+.ps-section {
+  margin-top: 14px;
+  padding: 16px 18px;
+  background: #06331e;
+  border: 1px solid rgba(215,177,84,0.5);
+  border-radius: 10px;
+  color: #e8f4e8;
+}
+
+.ps-confirm-section {
+  background: #06331e;
+  border-color: rgba(215,177,84,0.5);
+  color: #e8f4e8;
+}
+
+.ps-confirm-section .ps-confirm-msg {
+  color: #e8f4e8;
+}
+
+.ps-confirm-section .muted {
+  color: #9ab8a0;
+}
+
+.ps-confirm-section button {
+  background: transparent;
+  border: 1px solid rgba(215,177,84,0.5);
+  color: #f4d375;
+}
+
+.ps-confirm-section button:hover {
+  background: rgba(215,177,84,0.1);
+}
+
+.ps-confirm-section button.primary {
+  background: #d7b154;
+  color: #041109;
+  border-color: #d7b154;
+}
+
+.ps-confirm-section button.primary:hover {
+  background: #c9a445;
+}
+
+.ps-confirm-section button:disabled {
+  opacity: 0.45;
+  color: #c8dfc8;
+  cursor: not-allowed;
+}
+
+.ps-confirm-msg {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ps-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ps-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #9ab8a0;
+}
+
+.ps-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  color: #9ab8a0;
+  margin-bottom: 10px;
+}
+
+.ps-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.ps-countdown--due {
+  background: rgba(251,191,36,0.15);
+  border-color: rgba(251,191,36,0.5);
+  color: #92400e;
+}
+
+.ps-error {
+  color: #f87171;
+  font-size: 13px;
+}
+
+.ps-pill-sent   { background: rgba(74,222,128,0.18);  color: #4ade80; border: 1px solid rgba(74,222,128,0.4);   }
+.ps-pill-failed { background: rgba(248,113,113,0.18); color: #f87171; border: 1px solid rgba(248,113,113,0.4);  }
+.ps-pill-skipped{ background: rgba(156,163,175,0.15); color: #9ca3af; border: 1px solid rgba(156,163,175,0.3);  }
+.ps-pill-pending{ background: rgba(251,191,36,0.2);   color: #fbbf24; border: 1px solid rgba(251,191,36,0.45); }
+
 /* ─── Reduced Motion ─────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

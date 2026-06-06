@@ -52,8 +52,11 @@ let financeFilters = {
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let autoRefreshTimer = null;
 let stateFingerprint = "";
+let postStaySendConfirmId = null;
+let autoSending = false;
 
 const AUTO_REFRESH_MS = 10000;
+const AUTO_SEND_CHECK_MS = 60000;
 
 const tabs = [
   ["dashboard", "Dashboard"],
@@ -75,6 +78,7 @@ async function init() {
   }
   await loadData();
   startAutoRefresh();
+  startAutoSend();
 }
 
 function registerServiceWorker() {
@@ -1482,7 +1486,7 @@ function adminCleanupPreviewView(preview) {
 }
 
 function automationView() {
-  const rows = state.automation_queue.filter((item) => item.automation_type === "booking_confirmation");
+  const rows = state.automation_queue.filter((item) => item.automation_type === "booking_confirmation" || item.automation_type === "thank_you");
   return `
     <section class="panel">
       <h2>Automation Queue</h2>
@@ -1517,18 +1521,22 @@ function bookingAutomationSection(booking) {
   const confirmation = records.find((item) => item.automation_type === "booking_confirmation");
   const failed = records.find((item) => item.automation_type === "booking_confirmation" && item.status === "failed");
   const canSendConfirmation = booking.status === "Confirmed";
+  const postStay = records.find((item) => item.automation_type === "thank_you");
+  const isCompleted = booking.status === "Completed" || booking.status === "Checked Out";
   return `
     <table>
       <thead><tr><th>Email</th><th>Status</th><th>Scheduled</th><th>Sent</th></tr></thead>
       <tbody>
-        ${automationStatusRow("Booking confirmation", confirmation)}
+        ${automationStatusRow("Booking Confirmation", confirmation)}
+        ${isCompleted ? automationStatusRow("Post-Stay Email", postStay) : ""}
       </tbody>
     </table>
     ${canSendConfirmation ? "" : `<p class="message">Confirm booking first before sending confirmation email.</p>`}
     <div class="actions">
       <button type="button" data-booking-email-send="booking_confirmation" data-booking-id="${booking.id}" ${canSendConfirmation && canQueueOrSendAutomation(confirmation) ? "" : "disabled"}>Send Confirmation Email</button>
       <button type="button" data-automation-send="${failed?.id || ""}" ${canSendConfirmation && failed && canSendAutomation(failed) ? "" : "disabled"}>Retry Failed Email</button>
-    </div>`;
+    </div>
+    ${isCompleted ? postStayEmailSection(postStay) : ""}`;
 }
 
 function automationStatusRow(label, record) {
@@ -2075,6 +2083,7 @@ function bindForms() {
   bindCopyButtons();
   bindBookingNavButtons();
   bindQuickBookingPopup();
+  bindPostStayEmail();
   renderFloatingActions();
   document.querySelectorAll("form[data-action]").forEach((form) => {
     if (form.dataset.action === "unlock") return;
@@ -2609,6 +2618,7 @@ function closeAllModals() {
   confirmBookingDeposit = null;
   checkinPayment = null;
   checkoutSettlement = null;
+  postStaySendConfirmId = null;
 }
 
 async function confirmBookingWithDeposit(fields) {
@@ -3383,7 +3393,8 @@ function drinkMovementLabel(type) {
 
 function automationTypeLabel(type) {
   const labels = {
-    booking_confirmation: "Booking Confirmation"
+    booking_confirmation: "Booking Confirmation",
+    thank_you: "Post-Stay Email"
   };
   return labels[type] || type;
 }
@@ -3964,4 +3975,134 @@ function bindQuickBookingPopup() {
     };
     render();
   });
+}
+
+// ── Post-Stay Email (Phase 6B) ────────────────────────────────────────
+
+function sendingCountdown(scheduledFor) {
+  const ms = new Date(scheduledFor) - Date.now();
+  if (ms <= 0) return "soon";
+  const mins = Math.ceil(ms / 60000);
+  if (mins < 60) return `${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+}
+
+function postStayEmailSection(record) {
+  if (!record) {
+    return `<div class="ps-section"><p class="muted">Post-Stay Email will appear here after checkout is completed.</p></div>`;
+  }
+
+  const isSent = record.status === "sent";
+  const isPending = record.status === "pending";
+  const isFailed = record.status === "failed";
+  const isSkipped = record.status === "skipped";
+  const scheduledMs = new Date(record.scheduled_for) - Date.now();
+  const isDue = scheduledMs <= 0;
+  const statusClass = isSent ? "ps-pill-sent" : isFailed ? "ps-pill-failed" : isSkipped ? "ps-pill-skipped" : "ps-pill-pending";
+
+  if (postStaySendConfirmId === record.id) {
+    const countdown = sendingCountdown(record.scheduled_for);
+    return `
+      <div class="ps-section ps-confirm-section">
+        <p class="ps-confirm-msg">This Post-Stay Email is scheduled to send in <strong>${escapeHtml(countdown)}</strong>.</p>
+        <p class="ps-confirm-msg muted">Send now instead?</p>
+        <div class="actions">
+          <button type="button" data-ps-cancel-confirm>Cancel</button>
+          <button type="button" class="primary" data-ps-confirm-send="${escapeHtml(record.id)}">Send Now</button>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="ps-section">
+      <div class="ps-header">
+        <span class="ps-label">Post-Stay Email</span>
+        <span class="pill ${statusClass}">${escapeHtml(record.status)}</span>
+      </div>
+      <div class="ps-meta">
+        <span>Scheduled: ${formatDate(record.scheduled_for)}</span>
+        ${isPending && !isDue ? `<span class="ps-countdown">Sending in ${escapeHtml(sendingCountdown(record.scheduled_for))}</span>` : ""}
+        ${isPending && isDue ? `<span class="ps-countdown ps-countdown--due">Sending soon</span>` : ""}
+        ${isSent && record.sent_at ? `<span>Sent: ${formatDate(record.sent_at)}</span>` : ""}
+        ${isFailed ? `<span class="ps-error">Error: ${escapeHtml(record.error_message || "")}</span>` : ""}
+        ${isSkipped ? `<span class="muted">${escapeHtml(record.error_message || "Skipped — no guest email.")}</span>` : ""}
+      </div>
+      <div class="actions">
+        ${isSent ? `<button type="button" disabled>Already Sent</button>` : ""}
+        ${isSkipped ? `<button type="button" disabled>Cannot Send — No Email</button>` : ""}
+        ${isPending ? `<button type="button" data-ps-request-send="${escapeHtml(record.id)}">Send Now</button>` : ""}
+        ${isFailed ? `<button type="button" data-ps-request-send="${escapeHtml(record.id)}">Retry Send</button>` : ""}
+      </div>
+    </div>`;
+}
+
+function bindPostStayEmail() {
+  document.querySelectorAll("[data-ps-request-send]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      postStaySendConfirmId = btn.dataset.psRequestSend;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-ps-cancel-confirm]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      postStaySendConfirmId = null;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-ps-confirm-send]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const queueId = btn.dataset.psConfirmSend;
+      postStaySendConfirmId = null;
+      btn.disabled = true;
+      try {
+        await sendQueuedEmail(queueId);
+        await loadData();
+        showMessage("Post-Stay Email sent.", "success");
+      } catch (error) {
+        await loadData();
+        showMessage(error.message, "error");
+      }
+    });
+  });
+}
+
+function startAutoSend() {
+  setInterval(autoSendScheduledEmails, AUTO_SEND_CHECK_MS);
+}
+
+async function autoSendScheduledEmails() {
+  if (autoSending || !isAccessUnlocked() || !hasSupabaseConfig()) return;
+  const now = Date.now();
+  const staleThreshold = new Date(now - 24 * 60 * 60 * 1000);
+  const due = state.automation_queue.filter(
+    (item) =>
+      item.automation_type === "thank_you" &&
+      item.status === "pending" &&
+      new Date(item.scheduled_for) <= now &&
+      new Date(item.scheduled_for) >= staleThreshold
+  );
+  if (!due.length) return;
+  autoSending = true;
+  try {
+    for (const item of due) {
+      try {
+        await sendQueuedEmail(item.id);
+      } catch (error) {
+        console.warn("[auto-send] Failed:", item.id, error.message);
+      }
+    }
+    if (shouldSkipAutoRefresh()) {
+      await loadData({ silent: true });
+    } else {
+      await loadData();
+    }
+  } catch (error) {
+    console.warn("[auto-send] Refresh failed.", error.message);
+  } finally {
+    autoSending = false;
+  }
 }
