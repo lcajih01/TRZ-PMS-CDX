@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 
 const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+const bookingRequestHtml = await readFile(new URL("../booking-request.html", import.meta.url), "utf8");
+const bookingRequestCss = await readFile(new URL("../booking-request.css", import.meta.url), "utf8");
+const bookingRequestJs = await readFile(new URL("../src/booking-request.js", import.meta.url), "utf8");
 const indexHtml = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const supabase = await readFile(new URL("../src/supabase.js", import.meta.url), "utf8");
@@ -27,6 +30,9 @@ const automationMigration = await readFile(new URL("../supabase/migrations/015_p
 const automationTimingMigration = await readFile(new URL("../supabase/migrations/016_phase4a_automation_timing_rules.sql", import.meta.url), "utf8");
 const checkinRpcFixMigration = await readFile(new URL("../supabase/migrations/017_fix_checkin_rpc_overload.sql", import.meta.url), "utf8");
 const checkoutRpcFixMigration = await readFile(new URL("../supabase/migrations/018_fix_checkout_rpc_overload.sql", import.meta.url), "utf8");
+const adminCleanupMigration = await readFile(new URL("../supabase/migrations/019_manager_admin_month_cleanup.sql", import.meta.url), "utf8");
+const fullDeleteMigration = await readFile(new URL("../supabase/migrations/020_full_delete_test_booking.sql", import.meta.url), "utf8");
+const publicBookingRequestMigration = await readFile(new URL("../supabase/migrations/021_public_booking_request_form.sql", import.meta.url), "utf8");
 const migrationDir = new URL("../supabase/migrations/", import.meta.url);
 const migrationFiles = (await readdir(migrationDir)).filter((name) => name.endsWith(".sql")).sort();
 const allMigrations = (await Promise.all(migrationFiles.map(async (name) => [
@@ -51,6 +57,12 @@ assert.ok(app.includes("dashboard-page"), "dashboard must use the premium dashbo
 assert.ok(app.includes("dashboardUpcomingArrivals"), "dashboard must show upcoming arrivals from existing booking data");
 assert.ok(app.includes("dashboardRecentActivity"), "dashboard must show recent activity from existing loaded data");
 assert.ok(app.includes("navIcon"), "navigation must support sidebar-style icon labels without changing tab logic");
+assert.ok(app.includes("AUTO_REFRESH_MS = 10000"), "PMS must poll Supabase so public booking requests appear without manual refresh");
+assert.ok(app.includes("refreshDataIfIdle"), "PMS auto-refresh must update existing calendar/bookings data");
+assert.ok(app.includes("appStateFingerprint"), "PMS auto-refresh must compare old and new data before rendering");
+assert.ok(app.includes("stateFingerprint === nextFingerprint"), "PMS auto-refresh must skip rendering when data has not changed");
+assert.ok(app.includes("window.scrollTo(scrollX, scrollY)"), "PMS auto-refresh must preserve scroll position when data changes");
+assert.ok(app.includes("shouldSkipAutoRefresh"), "PMS auto-refresh must avoid wiping active forms or modals");
 assert.ok(styles.includes(".dashboard-kpi"), "dashboard must include premium KPI card styling");
 assert.ok(styles.includes(".dashboard-content-grid"), "dashboard must include upgraded dashboard content hierarchy");
 assert.ok(styles.includes(".dashboard-list-row"), "dashboard arrivals/activity rows must be styled");
@@ -95,6 +107,7 @@ assert.ok(serviceWorker.includes("Read-only notice"), "offline page must show re
 assert.ok(serviceWorker.includes("booking creation, payments, deposits, finance actions"), "offline page must block business operations in copy");
 assert.ok(server.includes("/api/automation/send"), "server must expose automation send endpoint");
 assert.ok(server.includes("sendAutomationEmail"), "server must call Resend email helper");
+assert.ok(server.includes("[automation/send]"), "automation send endpoint must log readable failures");
 assert.ok(!server.includes("RESEND_API_KEY:"), "server must not expose RESEND_API_KEY through env.js");
 assert.ok(resendHelper.includes("RESEND_API_KEY"), "Resend helper must use RESEND_API_KEY");
 assert.ok(resendHelper.includes("The Resthouse Zamboanga <bookings@theresthousezamboanga.com>"), "Resend sender must use TRZ display name and verified domain");
@@ -102,16 +115,32 @@ assert.ok(resendHelper.includes("theresthousezamboanga@gmail.com"), "Reply-To mu
 assert.ok(resendHelper.includes("https://api.resend.com/emails"), "Resend helper must call Resend email API");
 assert.ok(resendHelper.includes('setQueueStatus(config, queue.id, "sent"'), "Resend helper must mark sent on success");
 assert.ok(resendHelper.includes('setQueueStatus(config, queue.id, "failed"'), "Resend helper must mark failed on error");
+assert.ok(resendHelper.includes("readableError"), "Resend helper must preserve readable provider/setup errors");
 assert.ok(resendHelper.includes('queue.automation_type !== "booking_confirmation"'), "Email sending must reject non-confirmation automation types");
-assert.ok(resendHelper.includes("Penalties and Damages.pdf"), "Booking confirmation must attach penalties and damages PDF");
-assert.ok(resendHelper.includes("TRZ HOUSE RULES.pdf"), "Booking confirmation must attach house rules PDF");
-assert.ok(resendHelper.includes("TRZ LOCATION.pdf"), "Booking confirmation must attach location PDF");
+assert.ok(!resendHelper.includes("Penalties and Damages.pdf"), "Booking confirmation must not attach PDF documents (inline-only redesign)");
+assert.ok(!resendHelper.includes("TRZ HOUSE RULES.pdf"), "Booking confirmation must not attach PDF documents (inline-only redesign)");
+assert.ok(!resendHelper.includes("TRZ LOCATION.pdf"), "Booking confirmation must not attach PDF documents (inline-only redesign)");
 assert.ok(resendHelper.includes("Booking Confirmed"), "Booking confirmation must include branded confirmed badge text");
 assert.ok(resendHelper.includes("Payment Summary"), "Booking confirmation must include payment summary");
-assert.ok(resendHelper.includes("Arrival Reminders"), "Booking confirmation must include arrival reminders");
-assert.ok(resendHelper.includes("Attached Documents"), "Booking confirmation must include visual attached documents section");
+assert.ok(resendHelper.includes("Your Private Paradise. Your Home Away From Home."), "Booking confirmation must include TRZ hero tagline");
+assert.ok(resendHelper.includes("Explore The Resthouse"), "Booking confirmation must include resort photo section");
+assert.ok(resendHelper.includes("Your Package"), "Booking confirmation must include dynamic package section");
+assert.ok(resendHelper.includes("Your Stay Guide"), "Booking confirmation must include stay guide reminders");
+assert.ok(resendHelper.includes("Caring for Your Home Away"), "Booking confirmation must include care guidelines");
+assert.ok(resendHelper.includes("Registered Guests Only"), "Booking confirmation must include actual TRZ house rules");
+assert.ok(resendHelper.includes("No Pets Allowed"), "Booking confirmation must include no-pets rule");
+assert.ok(resendHelper.includes("Drinks & Corkage"), "Booking confirmation must include drinks corkage rule");
+assert.ok(!resendHelper.includes("food corkage"), "Booking confirmation must not include removed food corkage language");
+assert.ok(!resendHelper.includes("kitchen access"), "Booking confirmation must not include removed kitchen access language");
+assert.ok(!resendHelper.includes("catering"), "Booking confirmation must not include removed catering language");
 assert.ok(resendHelper.includes('content: bytes.toString("base64")'), "Booking confirmation attachments must use Base64 file content");
 assert.ok(resendHelper.includes("emailPayload.attachments"), "Attachments must be applied only when present");
+assert.ok(resendHelper.includes("inlineImageFiles"), "Booking confirmation must include inline resort photo assets");
+assert.ok(resendHelper.includes("content_id"), "Inline email photos must use CID attachments");
+assert.ok(resendHelper.includes("cid:trz-hero"), "Booking confirmation must embed hero photo inline");
+assert.ok(resendHelper.includes("cid:trz-pool"), "Booking confirmation must embed pool photo inline");
+assert.ok(resendHelper.includes("cid:trz-location"), "Booking confirmation must embed location map inline");
+assert.ok(resendHelper.includes("packageInclusions"), "Booking confirmation must derive inclusions from package data");
 assert.ok(!resendHelper.includes("buildCheckinReminderEmail"), "Check-in reminder email builder must be removed");
 assert.ok(!resendHelper.includes("buildThankYouEmail"), "Thank-you email builder must be removed");
 assert.ok(!resendHelper.includes("CHECK-IN REMINDER"), "Check-in reminder branded template must be removed");
@@ -119,6 +148,24 @@ assert.ok(!resendHelper.includes("THANK YOU FOR STAYING"), "Thank-you branded te
 assert.ok(!resendHelper.includes("Check-in Reminder"), "Check-in reminder subject text must be removed");
 assert.ok(!resendHelper.includes("Thank You"), "Thank-you subject text must be removed");
 assert.ok(!resendHelper.includes("Full payment/balance must be settled before access"), "Check-in reminder payment/balance text must be removed");
+assert.ok(bookingRequestHtml.includes("Booking Request Form"), "public booking request form must exist");
+assert.ok(bookingRequestHtml.includes("./src/booking-request.js"), "public booking request form must load its script");
+assert.ok(bookingRequestHtml.includes("Our team will review your request"), "public form must tell guests staff will review the request");
+assert.ok(bookingRequestHtml.includes("online payment") === false, "public form must not mention online payment");
+assert.ok(bookingRequestCss.includes("@media (max-width: 560px)"), "public form must include mobile-first layout rules");
+assert.ok(bookingRequestCss.includes("min-height: 48px"), "public form controls must have large mobile touch targets");
+assert.ok(bookingRequestJs.includes("showPicker"), "public booking form date inputs must open the date picker from the input body");
+assert.ok(bookingRequestJs.includes('select("packages"'), "public form must load current PMS packages");
+assert.ok(bookingRequestJs.includes('select("package_versions"'), "public form must load current package versions");
+assert.ok(bookingRequestJs.includes("submit_public_booking_request"), "public form must submit through the public request RPC");
+assert.ok(!bookingRequestJs.includes("queue_booking_automation"), "public request form must not queue email automation");
+assert.ok(!bookingRequestJs.includes("automation_queue"), "public request form must not touch automation queue directly");
+assert.ok(!bookingRequestJs.includes("calculateBasePrice"), "public request form must not show price estimator logic");
+assert.ok(publicBookingRequestMigration.includes("create or replace function public.submit_public_booking_request"), "public request RPC must exist");
+assert.ok(publicBookingRequestMigration.includes("'Deposit Requested'"), "public request RPC must create Deposit Requested bookings");
+assert.ok(publicBookingRequestMigration.includes("delete from public.automation_queue"), "public request RPC must remove auto-created request email queue records");
+assert.ok(publicBookingRequestMigration.includes("Public booking request submitted"), "public request RPC must audit submissions");
+assert.ok(!publicBookingRequestMigration.includes("add value") || !publicBookingRequestMigration.includes("'Pending'"), "public request migration must not add a Pending status");
 assert.ok(!resendHelper.includes("comfortable and enjoyable stay"), "Thank-you message text must be removed");
 assert.ok(!resendHelper.includes("Book Again"), "Thank-you repeat booking section must be removed");
 assert.ok(foundationMigration.includes("bookings_no_active_overlap"), "migration must enforce calendar conflict prevention");
@@ -155,6 +202,12 @@ assert.ok(app.includes("Owner Harvest"), "Manager View Finance must include Owne
 assert.ok(app.includes('data-action="owner-harvest"'), "Owner Harvest form must exist");
 assert.ok(app.includes('verify_manager_security_code", { input_code: fields.manager_code }'), "Owner Harvest must require Manager Security Code");
 assert.ok(app.includes("Automation Queue"), "Settings must show Automation Queue");
+assert.ok(app.includes("Admin Tools"), "Settings must include Manager-only Admin Tools");
+assert.ok(app.includes('isManagerViewUnlocked() ? adminToolsView() : ""'), "Admin Tools must render only in Manager View");
+assert.ok(app.includes('data-action="admin-cleanup-preview"'), "Admin Tools must require a preview before delete");
+assert.ok(app.includes('data-action="admin-cleanup-delete"'), "Admin Tools must include a final delete action");
+assert.ok(app.includes("admin_delete_data_by_month"), "Admin Tools must call the cleanup RPC");
+assert.ok(app.includes("Confirmation text must exactly match"), "Admin delete must enforce exact confirmation text in UI");
 assert.ok(app.includes("Emails send through the local server"), "Automation must explain server email sending");
 assert.ok(app.includes("set_automation_queue_status"), "Automation status changes must use RPC");
 assert.ok(app.includes("Email / Automation"), "Booking modal must show email automation controls");
@@ -167,6 +220,9 @@ assert.ok(app.includes("No guest email; confirmation skipped"), "Booking creatio
 assert.ok(app.includes("queue_booking_automation"), "Booking modal must use queue automation RPC");
 assert.ok(app.includes("Ready to send"), "Due pending automation items must show ready to send");
 assert.ok(app.includes('fetch("/api/automation/send"'), "Automation queue must call local send endpoint");
+assert.ok(app.includes("markAutomationFailed"), "Automation send failures must update queue status to failed");
+assert.ok(app.includes("Email server unreachable"), "Automation send failures must show local server connection errors");
+assert.ok(app.includes("Email server returned an unreadable response"), "Automation send failures must show non-JSON endpoint errors");
 assert.ok(app.includes("Send Email"), "Automation queue must expose real send action");
 assert.ok(app.includes("Send Confirmation Email"), "Booking modal must expose real confirmation send action");
 assert.ok(!app.includes("Send Check-in Reminder"), "Booking modal must not expose check-in reminder send action");
@@ -181,8 +237,21 @@ assert.ok(app.includes("data-booking-search-form"), "booking search must exist")
 assert.ok(app.includes("booking-notes"), "booking notes update form must exist");
 assert.ok(app.includes("timelineEventsForBooking"), "booking timeline must be derived from existing records");
 assert.ok(app.includes("Edit Booking"), "booking action modal must support edit/reschedule");
+assert.ok(app.includes("Confirm Booking"), "Deposit Requested bookings must support staff confirmation");
+assert.ok(app.includes("confirmBookingDepositModal"), "Confirm Booking must open a deposit/payment modal first");
+assert.ok(app.includes("Save Deposit and Confirm Booking"), "staff confirmation must require the deposit modal workflow");
+assert.ok(app.includes("Security Deposit Liability"), "confirmation deposit must remain a liability");
+assert.ok(app.includes("Booking confirmed after payment verification"), "staff confirmation must create an audit reason");
+assert.ok(app.includes("Confirm booking first before sending confirmation email."), "confirmation email must be blocked until booking is Confirmed");
+assert.ok(app.includes("booking?.status !== \"Confirmed\""), "email send function must enforce Confirmed status");
+assert.ok(app.includes("bindDatePickerOpeners"), "PMS date inputs must open the date picker from the input body");
+assert.ok(app.includes("bindModalBackdropClose"), "PMS modals must close by clicking the overlay");
+assert.ok(app.includes("event.target !== backdrop"), "modal overlay close must not trigger from inside modal content");
 assert.ok(app.includes("Cancel Booking"), "booking action modal must support cancellation with reason");
 assert.ok(app.includes("Archive Booking"), "completed/cancelled/refunded bookings must support archive");
+assert.ok(app.includes("Manager View is required for testing deletes"), "Delete Booking must be Manager View only");
+assert.ok(app.includes("confirmation_text"), "Delete Booking must send exact confirmation text to RPC");
+assert.ok(app.includes("DELETE ${booking.booking_code}"), "Delete Booking must require DELETE booking-code confirmation");
 assert.ok(app.includes("data-calendar-nav=\"prev\""), "calendar must support previous month navigation");
 assert.ok(app.includes("data-calendar-nav=\"next\""), "calendar must support next month navigation");
 assert.ok(app.includes("data-calendar-nav=\"today\""), "calendar must support today navigation");
@@ -207,7 +276,9 @@ assert.ok(financialWorkflowMigration.includes("Checkout settlement is required")
 assert.ok(checkinWorkflowMigration.includes("perform_checkin_payment"), "check-in payment RPC must exist");
 assert.ok(checkinWorkflowMigration.includes("Check-in payment confirmation is required"), "direct Checked In status update must be guarded");
 assert.ok(deleteMigration.includes("delete_test_booking"), "testing delete RPC must exist");
-assert.ok(deleteMigration.includes("financial records"), "testing delete must protect financial bookings");
+assert.ok(styles.includes(".pill-deposit-requested { background: rgba(251,191,36"), "Deposit Requested status badge must be yellow");
+assert.ok(styles.includes(".day-segment.deposit-requested"), "Deposit Requested calendar segment must have a specific yellow indicator");
+assert.ok(styles.includes(".booking-card.s-deposit-requested{ border-left-color: #fbbf24"), "Deposit Requested booking cards must use yellow status color");
 assert.ok(checkoutCompletesMigration.includes("set status = 'Completed'"), "checkout settlement must complete bookings");
 assert.ok(hardeningMigration.includes("'checkin_payment'"), "check-in audit must be written by RPC");
 assert.ok(hardeningMigration.includes("'checkout_settlement'"), "checkout settlement audit must be written by RPC");
@@ -258,6 +329,45 @@ assert.ok(checkoutRpcFixMigration.includes("if target_booking.status = 'Complete
 assert.ok(!checkoutRpcFixMigration.includes("create or replace function public.record_owner_harvest"), "owner harvest RPC overload must not be introduced");
 assert.ok(!checkoutRpcFixMigration.includes("create or replace function public.record_expense"), "expense RPC overload must not be introduced");
 assert.ok(!checkoutRpcFixMigration.includes("create or replace function public.record_transfer"), "transfer RPC overload must not be introduced");
+assert.ok(adminCleanupMigration.includes("create or replace function public.admin_delete_data_by_month"), "manager month cleanup RPC must exist");
+assert.ok(adminCleanupMigration.includes("security definer"), "manager month cleanup must run as a controlled security-definer RPC");
+assert.ok(adminCleanupMigration.includes("public.verify_manager_security_code(manager_code)"), "manager month cleanup must verify Manager Security Code");
+assert.ok(adminCleanupMigration.includes("dry_run boolean default true"), "manager month cleanup must support preview/dry-run mode");
+assert.ok(adminCleanupMigration.includes("expected_confirmation := 'DELETE ' || upper(month_label)"), "manager month cleanup must require DELETE MONTH YEAR confirmation text");
+assert.ok(adminCleanupMigration.includes("where b.start_at >= period_start"), "manager month cleanup must target bookings by check-in month");
+assert.ok(adminCleanupMigration.includes("delete from public.automation_queue"), "manager month cleanup must delete booking automation records");
+assert.ok(adminCleanupMigration.includes("delete from public.security_deposits"), "manager month cleanup must delete booking deposit helpers");
+assert.ok(adminCleanupMigration.includes("delete from public.ledger_lines"), "manager month cleanup must delete ledger lines before ledger entries");
+assert.ok(adminCleanupMigration.includes("delete from public.ledger_entries"), "manager month cleanup must delete linked ledger entries");
+assert.ok(adminCleanupMigration.includes("delete from public.expenses"), "manager month cleanup must delete booking-linked expenses");
+assert.ok(adminCleanupMigration.includes("delete from public.drink_sales"), "manager month cleanup must delete booking-linked drink sales");
+assert.ok(adminCleanupMigration.includes("delete from public.bookings"), "manager month cleanup must delete selected-month bookings");
+assert.ok(adminCleanupMigration.includes("delete from public.guests"), "manager month cleanup must delete only guests without remaining bookings");
+assert.ok(!adminCleanupMigration.includes("delete from public.packages"), "manager month cleanup must not delete packages");
+assert.ok(!adminCleanupMigration.includes("delete from public.package_versions"), "manager month cleanup must not delete package versions");
+assert.ok(!adminCleanupMigration.includes("delete from public.wallets"), "manager month cleanup must not delete wallets");
+assert.ok(!adminCleanupMigration.includes("delete from public.settings"), "manager month cleanup must not delete settings");
+assert.ok(!adminCleanupMigration.includes("delete from public.booking_counters"), "manager month cleanup must not delete booking counters");
+assert.ok(adminCleanupMigration.includes("grant execute on function public.admin_delete_data_by_month"), "manager month cleanup RPC must be callable by the frontend");
+assert.ok(fullDeleteMigration.includes("proname = 'delete_test_booking'"), "full delete migration must drop old delete_test_booking overloads");
+assert.ok(fullDeleteMigration.includes("confirmation_text text"), "full delete RPC must require confirmation text");
+assert.ok(fullDeleteMigration.includes("expected_confirmation := 'DELETE ' || target_booking.booking_code"), "full delete RPC must require DELETE booking-code text");
+assert.ok(fullDeleteMigration.includes("public.verify_manager_security_code(manager_code)"), "full delete RPC must verify Manager Security Code");
+assert.ok(fullDeleteMigration.includes("delete from public.automation_queue"), "full delete RPC must delete booking automation records");
+assert.ok(fullDeleteMigration.includes("delete from public.security_deposits"), "full delete RPC must delete booking deposit helper");
+assert.ok(fullDeleteMigration.includes("delete from public.ledger_lines"), "full delete RPC must delete ledger lines before ledger entries");
+assert.ok(fullDeleteMigration.includes("delete from public.ledger_entries"), "full delete RPC must delete booking ledger entries");
+assert.ok(fullDeleteMigration.includes("delete from public.expenses"), "full delete RPC must delete booking-linked expenses");
+assert.ok(fullDeleteMigration.includes("delete from public.drink_sales"), "full delete RPC must delete booking-linked drink sales");
+assert.ok(fullDeleteMigration.includes("delete from public.drink_inventory_movements"), "full delete RPC must delete booking-linked drink movements");
+assert.ok(!fullDeleteMigration.includes("delete from public.audit_logs"), "full delete RPC must leave append-only audit logs intact");
+assert.ok(fullDeleteMigration.includes("delete from public.bookings"), "full delete RPC must delete only the selected booking");
+assert.ok(fullDeleteMigration.includes("delete from public.guests"), "full delete RPC must delete guest only if no bookings remain");
+assert.ok(!fullDeleteMigration.includes("delete from public.packages"), "full delete RPC must not delete packages");
+assert.ok(!fullDeleteMigration.includes("delete from public.package_versions"), "full delete RPC must not delete package versions");
+assert.ok(!fullDeleteMigration.includes("delete from public.wallets"), "full delete RPC must not delete wallets");
+assert.ok(!fullDeleteMigration.includes("delete from public.settings"), "full delete RPC must not delete settings");
+assert.ok(!fullDeleteMigration.includes("delete from public.booking_counters"), "full delete RPC must not delete booking counters");
 assertNoUnsafeRpcOverloads(allMigrations, {
   perform_checkin_payment: ["uuid", "numeric", "uuid", "numeric", "uuid", "text", "numeric"],
   perform_checkout_settlement: ["uuid", "numeric", "text", "numeric", "uuid", "numeric", "numeric"],
@@ -266,7 +376,9 @@ assertNoUnsafeRpcOverloads(allMigrations, {
   change_pms_access_code: ["text", "text"],
   change_manager_security_code: ["text", "text"],
   set_automation_queue_status: ["uuid", "text", "text"],
-  delete_test_booking: ["uuid", "text"]
+  delete_test_booking: ["uuid", "text", "text"],
+  admin_delete_data_by_month: ["integer", "integer", "text", "text", "boolean"],
+  submit_public_booking_request: ["date", "date", "uuid", "integer", "text", "text", "text", "text", "text", "text", "boolean", "boolean", "boolean"]
 });
 
 console.log("Persistence boundary tests passed.");

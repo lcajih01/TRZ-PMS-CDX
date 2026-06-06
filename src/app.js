@@ -38,6 +38,8 @@ let guestProfileContext = null;
 let editBookingContext = null;
 let cancelBookingContext = null;
 let transactionContext = null;
+let confirmBookingDeposit = null;
+let adminCleanupPreview = null;
 let bookingSearchQuery = "";
 let financeFilters = {
   start_date: "",
@@ -47,6 +49,10 @@ let financeFilters = {
   search: ""
 };
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let autoRefreshTimer = null;
+let stateFingerprint = "";
+
+const AUTO_REFRESH_MS = 10000;
 
 const tabs = [
   ["dashboard", "Dashboard"],
@@ -67,6 +73,7 @@ async function init() {
     return;
   }
   await loadData();
+  startAutoRefresh();
 }
 
 function registerServiceWorker() {
@@ -78,76 +85,132 @@ function registerServiceWorker() {
   });
 }
 
-async function loadData() {
-  loading = true;
-  renderShell();
+async function loadData({ silent = false } = {}) {
+  if (!silent) {
+    loading = true;
+    renderShell();
+  }
   try {
-    const [
-      packages,
-      package_versions,
-      guests,
-      bookings,
-      wallets,
-      ledger_entries,
-      ledger_lines,
-      security_deposits,
-      expenses,
-      daily_closings,
-      drink_products,
-      drink_inventory_movements,
-      drink_sales,
-      electricity_monthly_baselines,
-      electricity_readings,
-      owner_harvests,
-      automation_queue,
-      audit_logs
-    ] = await Promise.all([
-      select("packages", { order: "order=name.asc" }),
-      select("package_versions", { order: "order=version_number.asc" }),
-      select("guests", { order: "order=created_at.desc" }),
-      select("bookings", { order: "order=start_at.desc" }),
-      select("wallets", { order: "order=sort_order.asc" }),
-      select("ledger_entries", { order: "order=created_at.desc" }),
-      select("ledger_lines"),
-      select("security_deposits"),
-      safeSelect("expenses", { order: "order=expense_date.desc" }),
-      safeSelect("daily_closings", { order: "order=created_at.desc" }),
-      safeSelect("drink_products", { order: "order=name.asc" }),
-      safeSelect("drink_inventory_movements", { order: "order=movement_date.desc" }),
-      safeSelect("drink_sales", { order: "order=sale_date.desc" }),
-      safeSelect("electricity_monthly_baselines", { order: "order=billing_period_month.desc" }),
-      safeSelect("electricity_readings", { order: "order=reading_date.desc" }),
-      safeSelect("owner_harvests", { order: "order=harvest_date.desc" }),
-      safeSelect("automation_queue", { order: "order=created_at.desc" }),
-      select("audit_logs", { order: "order=created_at.desc" })
-    ]);
-
-    state = {
-      packages,
-      package_versions,
-      guests,
-      bookings,
-      wallets,
-      ledger_entries,
-      ledger_lines,
-      security_deposits,
-      expenses,
-      daily_closings,
-      drink_products,
-      drink_inventory_movements,
-      drink_sales,
-      electricity_monthly_baselines,
-      electricity_readings,
-      owner_harvests,
-      automation_queue,
-      audit_logs
-    };
+    state = await fetchAppState();
+    stateFingerprint = appStateFingerprint(state);
   } catch (error) {
-    showMessage(error.message);
+    if (!silent) showMessage(error.message);
+    else console.warn("Auto-refresh failed.", error);
   } finally {
     loading = false;
-    render();
+    if (!silent) render();
   }
+}
+
+async function fetchAppState() {
+  const [
+    packages,
+    package_versions,
+    guests,
+    bookings,
+    wallets,
+    ledger_entries,
+    ledger_lines,
+    security_deposits,
+    expenses,
+    daily_closings,
+    drink_products,
+    drink_inventory_movements,
+    drink_sales,
+    electricity_monthly_baselines,
+    electricity_readings,
+    owner_harvests,
+    automation_queue,
+    audit_logs
+  ] = await Promise.all([
+    select("packages", { order: "order=name.asc" }),
+    select("package_versions", { order: "order=version_number.asc" }),
+    select("guests", { order: "order=created_at.desc" }),
+    select("bookings", { order: "order=start_at.desc" }),
+    select("wallets", { order: "order=sort_order.asc" }),
+    select("ledger_entries", { order: "order=created_at.desc" }),
+    select("ledger_lines"),
+    select("security_deposits"),
+    safeSelect("expenses", { order: "order=expense_date.desc" }),
+    safeSelect("daily_closings", { order: "order=created_at.desc" }),
+    safeSelect("drink_products", { order: "order=name.asc" }),
+    safeSelect("drink_inventory_movements", { order: "order=movement_date.desc" }),
+    safeSelect("drink_sales", { order: "order=sale_date.desc" }),
+    safeSelect("electricity_monthly_baselines", { order: "order=billing_period_month.desc" }),
+    safeSelect("electricity_readings", { order: "order=reading_date.desc" }),
+    safeSelect("owner_harvests", { order: "order=harvest_date.desc" }),
+    safeSelect("automation_queue", { order: "order=created_at.desc" }),
+    select("audit_logs", { order: "order=created_at.desc" })
+  ]);
+
+  return {
+    packages,
+    package_versions,
+    guests,
+    bookings,
+    wallets,
+    ledger_entries,
+    ledger_lines,
+    security_deposits,
+    expenses,
+    daily_closings,
+    drink_products,
+    drink_inventory_movements,
+    drink_sales,
+    electricity_monthly_baselines,
+    electricity_readings,
+    owner_harvests,
+    automation_queue,
+    audit_logs
+  };
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) return;
+  autoRefreshTimer = setInterval(refreshDataIfIdle, AUTO_REFRESH_MS);
+  window.addEventListener("focus", refreshDataIfIdle);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshDataIfIdle();
+  });
+}
+
+async function refreshDataIfIdle() {
+  if (!hasSupabaseConfig() || !isAccessUnlocked() || loading || document.hidden || shouldSkipAutoRefresh()) return;
+  let nextState;
+  try {
+    nextState = await fetchAppState();
+  } catch (error) {
+    console.warn("Auto-refresh failed.", error);
+    return;
+  }
+  const nextFingerprint = appStateFingerprint(nextState);
+  if (stateFingerprint === nextFingerprint) return;
+
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  state = nextState;
+  stateFingerprint = nextFingerprint;
+  render();
+  requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY);
+  });
+}
+
+function shouldSkipAutoRefresh() {
+  if (document.querySelector(".modal-backdrop")) return true;
+  const active = document.activeElement;
+  return Boolean(active?.closest?.("form"));
+}
+
+function appStateFingerprint(source) {
+  return JSON.stringify(Object.fromEntries(
+    Object.keys(source).sort().map((key) => [
+      key,
+      Array.isArray(source[key])
+        ? [...source[key]].sort((a, b) => String(a.id || a.booking_code || "").localeCompare(String(b.id || b.booking_code || "")))
+        : source[key]
+    ])
+  ));
 }
 
 async function safeSelect(table, options) {
@@ -211,6 +274,7 @@ function render() {
   if (editBookingContext) view.innerHTML += editBookingModal(editBookingContext);
   if (cancelBookingContext) view.innerHTML += cancelBookingModal(cancelBookingContext);
   if (transactionContext) view.innerHTML += transactionModal(transactionContext);
+  if (confirmBookingDeposit) view.innerHTML += confirmBookingDepositModal(confirmBookingDeposit);
   if (checkinPayment) view.innerHTML += checkinPaymentModal(checkinPayment);
   if (checkoutSettlement) view.innerHTML += checkoutSettlementModal(checkoutSettlement);
   bindForms();
@@ -236,6 +300,8 @@ function renderShell() {
     editBookingContext = null;
     cancelBookingContext = null;
     transactionContext = null;
+    confirmBookingDeposit = null;
+    adminCleanupPreview = null;
     checkinPayment = null;
     checkoutSettlement = null;
     activeTab = "dashboard";
@@ -540,10 +606,10 @@ function calendarSegmentsForDay(day) {
       kind = "completed";
       label = "Completed";
     } else if (startsToday && endsToday) {
-      kind = occupiedStatus ? "occupied" : "reserved";
+      kind = occupiedStatus ? "occupied" : calendarHoldKind(booking.status);
       label = booking.status;
     } else if (startsToday) {
-      kind = occupiedStatus ? "checkin" : "reserved-checkin";
+      kind = occupiedStatus ? "checkin" : `${calendarHoldKind(booking.status)}-checkin`;
       label = occupiedStatus ? "Check-In" : `${booking.status} Check-In`;
     } else if (endsToday) {
       kind = "checkout";
@@ -552,13 +618,19 @@ function calendarSegmentsForDay(day) {
       kind = "occupied";
       label = "Occupied";
     } else if (futureHoldStatus) {
-      kind = "reserved";
+      kind = calendarHoldKind(booking.status);
       label = booking.status;
     }
     return { booking, kind, label };
   });
   const activeSegments = segments.filter((segment) => segment.booking.status !== "Completed");
   return activeSegments.length ? activeSegments : segments;
+}
+
+function calendarHoldKind(status) {
+  if (status === "Deposit Requested") return "deposit-requested";
+  if (status === "Tentative") return "tentative";
+  return "reserved";
 }
 
 function packagesView() {
@@ -1313,6 +1385,74 @@ function settingsView() {
       ${walletsView()}
       ${automationView()}
       ${securitySettingsSection()}
+      ${isManagerViewUnlocked() ? adminToolsView() : ""}
+    </div>`;
+}
+
+function adminToolsView() {
+  const now = new Date();
+  const selectedMonth = adminCleanupPreview?.input_month || now.getMonth() + 1;
+  const selectedYear = adminCleanupPreview?.input_year || now.getFullYear();
+  return `
+    <section class="panel admin-danger-zone">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow danger-text">Manager Only</p>
+          <h2>Admin Tools</h2>
+        </div>
+        <span class="pill danger-pill">Danger Zone</span>
+      </div>
+      <p class="muted">Delete training and testing records connected to bookings whose check-in date falls inside one selected month. This does not delete packages, wallets, settings, counters, or drink product setup.</p>
+      <form data-action="admin-cleanup-preview" class="grid four">
+        <label class="field"><span>Month</span><select name="input_month" required>${monthOptions(selectedMonth)}</select></label>
+        <label class="field"><span>Year</span><input name="input_year" type="number" min="2020" max="2100" value="${selectedYear}" required /></label>
+        <label class="field"><span>Manager Security Code</span><input name="manager_code" type="password" inputmode="numeric" required /></label>
+        <label class="field"><span>&nbsp;</span><button class="primary" type="submit">Preview Delete</button></label>
+      </form>
+      ${adminCleanupPreview ? adminCleanupPreviewView(adminCleanupPreview) : `
+        <div class="danger-note">
+          <strong>No preview loaded.</strong>
+          <span>Run preview first. Nothing can be deleted until the matching confirmation phrase is typed.</span>
+        </div>`}
+    </section>`;
+}
+
+function adminCleanupPreviewView(preview) {
+  const confirmation = escapeHtml(preview.expected_confirmation || "");
+  const rows = [
+    ["Month selected", preview.month_label],
+    ["Bookings found", preview.bookings_found],
+    ["Guests affected", preview.guests_affected],
+    ["Guests to delete", preview.guests_to_delete],
+    ["Ledger entries affected", preview.ledger_entries_affected],
+    ["Deposits affected", preview.deposits_affected],
+    ["Automation records affected", preview.automation_records_affected],
+    ["Expenses affected", preview.expenses_affected],
+    ["Drink sales affected", preview.drink_sales_affected],
+    ["Drink movements affected", preview.drink_movements_affected],
+    ["Audit logs affected", preview.audit_logs_affected]
+  ];
+  return `
+    <div class="admin-preview">
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>Preview Item</th><th>Count / Value</th></tr></thead>
+          <tbody>${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td><strong>${escapeHtml(value)}</strong></td></tr>`).join("")}</tbody>
+        </table>
+      </div>
+      <div class="danger-note strong">
+        <strong>Final confirmation required:</strong>
+        <span>Type <code>${confirmation}</code> exactly. This action cannot be undone.</span>
+      </div>
+      <form data-action="admin-cleanup-delete" class="grid two">
+        <input type="hidden" name="input_month" value="${preview.input_month}" />
+        <input type="hidden" name="input_year" value="${preview.input_year}" />
+        <label class="field"><span>Manager Security Code</span><input name="manager_code" type="password" inputmode="numeric" required /></label>
+        <label class="field"><span>Confirmation Text</span><input name="confirmation_text" placeholder="${confirmation}" required /></label>
+        <div class="actions">
+          <button class="danger-button" type="submit">Delete Selected Month Data</button>
+        </div>
+      </form>
     </div>`;
 }
 
@@ -1351,6 +1491,7 @@ function bookingAutomationSection(booking) {
   const records = automationRecordsForBooking(booking.id);
   const confirmation = records.find((item) => item.automation_type === "booking_confirmation");
   const failed = records.find((item) => item.automation_type === "booking_confirmation" && item.status === "failed");
+  const canSendConfirmation = booking.status === "Confirmed";
   return `
     <table>
       <thead><tr><th>Email</th><th>Status</th><th>Scheduled</th><th>Sent</th></tr></thead>
@@ -1358,9 +1499,10 @@ function bookingAutomationSection(booking) {
         ${automationStatusRow("Booking confirmation", confirmation)}
       </tbody>
     </table>
+    ${canSendConfirmation ? "" : `<p class="message">Confirm booking first before sending confirmation email.</p>`}
     <div class="actions">
-      <button type="button" data-booking-email-send="booking_confirmation" data-booking-id="${booking.id}" ${canQueueOrSendAutomation(confirmation) ? "" : "disabled"}>Send Confirmation Email</button>
-      <button type="button" data-automation-send="${failed?.id || ""}" ${failed && canSendAutomation(failed) ? "" : "disabled"}>Retry Failed Email</button>
+      <button type="button" data-booking-email-send="booking_confirmation" data-booking-id="${booking.id}" ${canSendConfirmation && canQueueOrSendAutomation(confirmation) ? "" : "disabled"}>Send Confirmation Email</button>
+      <button type="button" data-automation-send="${failed?.id || ""}" ${canSendConfirmation && failed && canSendAutomation(failed) ? "" : "disabled"}>Retry Failed Email</button>
     </div>`;
 }
 
@@ -1505,12 +1647,12 @@ function bookingActionModal(context) {
           ${actions.map((action) => `<button type="button" ${action.disabled ? "disabled" : ""} class="${action.id === "cancel" ? "danger" : ""}" data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`).join("")}
         </div>
 
-        <details class="testing-actions">
+        ${isManagerViewUnlocked() ? `<details class="testing-actions">
           <summary>Testing actions</summary>
           <div class="actions">
             <button type="button" class="danger" data-booking-id="${booking.id}" data-booking-action="delete">Delete Booking</button>
           </div>
-        </details>
+        </details>` : ""}
       </section>
     </div>`;
 }
@@ -1654,6 +1796,44 @@ function transactionModal(context) {
     </div>`;
 }
 
+function confirmBookingDepositModal(context) {
+  const booking = context.booking;
+  const received = Number(booking.total_deposit_received || 0);
+  const depositDue = depositBalanceDue(booking);
+  const defaultAmount = depositDue > 0 ? depositDue : 0;
+  return `
+    <div class="modal-backdrop">
+      <section class="panel modal">
+        <div class="booking-card-header">
+          <div>
+            <h2>Confirm Booking Deposit</h2>
+            <span>${booking.booking_code} - ${guestName(booking.guest_id)}</span>
+          </div>
+          <button type="button" data-action="close-modal">Close</button>
+        </div>
+        <div class="settlement-summary">
+          <div><span>Security Deposit Required</span><strong>${money(booking.security_deposit_amount)}</strong></div>
+          <div><span>Security Deposit Received</span><strong>${money(received)}</strong></div>
+          <div><span>Remaining Deposit Balance</span><strong class="${depositDue > 0 ? "text-warning" : "text-success"}">${money(depositDue)}</strong></div>
+          <div><span>New Status After Save</span><strong>Confirmed</strong></div>
+        </div>
+        <form data-action="confirm-booking-deposit">
+          <input type="hidden" name="booking_id" value="${booking.id}" />
+          <label class="field"><span>Security deposit / reservation fee received</span><input name="deposit_amount" type="number" min="0" max="${depositDue}" value="${defaultAmount}" required /></label>
+          <label class="field"><span>Deposit wallet</span><select name="deposit_wallet_id">${walletOptions()}</select></label>
+          <label class="field"><span>Reference number</span><input name="reference_number" /></label>
+          <label class="field"><span>Proof note</span><input name="proof_note" /></label>
+          <label class="field"><span>Notes</span><textarea name="notes" placeholder="Payment verification notes"></textarea></label>
+          <p class="message">Security deposit is recorded as Security Deposit Liability, not revenue.</p>
+          <div class="actions">
+            <button class="primary">Save Deposit and Confirm Booking</button>
+            <button type="button" data-action="close-modal">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>`;
+}
+
 function bookingActionsForStatus(booking) {
   if (booking.status === "Archived") {
     return [{ id: "history", label: "View Booking History", disabled: true }];
@@ -1671,13 +1851,17 @@ function bookingActionsForStatus(booking) {
       { id: "checkout", label: "Check Out" }
     ];
   }
-  return [
+  const actions = [
     { id: "edit", label: "Edit Booking" },
     { id: "payment", label: "Record Payment" },
     { id: "deposit", label: "Record Deposit" },
     { id: "checkin", label: "Check In" },
     { id: "cancel", label: "Cancel Booking" }
   ];
+  if (booking.status === "Deposit Requested") {
+    actions.unshift({ id: "confirm", label: "Confirm Booking" });
+  }
+  return actions;
 }
 
 function checkoutSettlementModal(context) {
@@ -1800,6 +1984,7 @@ function bindAccessForms() {
       resetAttempts(pmsAttemptsKey);
       sessionStorage.setItem(accessSessionKey, "true");
       await loadData();
+      startAutoRefresh();
     } catch (error) {
       showMessage(error.message);
       render();
@@ -1838,6 +2023,7 @@ async function unlockManagerView() {
 
 function bindForms() {
   hydrateBookingDateForm();
+  bindDatePickerOpeners();
   hydrateCheckoutSettlementForm();
   bindBookingSearch();
   bindCalendarNavigation();
@@ -1848,6 +2034,7 @@ function bindForms() {
   bindDrinkProductActions();
   bindAutomationActions();
   bindBookingActionButtons();
+  bindModalBackdropClose();
   document.querySelectorAll("form[data-action]").forEach((form) => {
     if (form.dataset.action === "unlock") return;
     form.addEventListener("submit", async (event) => {
@@ -1898,9 +2085,22 @@ function bindForms() {
         }
         if (form.dataset.action === "checkin-payment") await confirmCheckinPayment(fields);
         if (form.dataset.action === "checkout-settlement") await confirmCheckoutSettlement(fields);
+        if (form.dataset.action === "confirm-booking-deposit") await confirmBookingWithDeposit(fields);
         if (form.dataset.action === "unlock-security") await unlockSecurity(fields);
         if (form.dataset.action === "change-pms-code") await changePmsCode(fields);
         if (form.dataset.action === "change-manager-code") await changeManagerCode(fields);
+        if (form.dataset.action === "admin-cleanup-preview") {
+          await previewAdminMonthCleanup(fields);
+          shouldRefresh = false;
+          successMessage = "Preview ready.";
+          render();
+          showMessage(successMessage);
+        }
+        if (form.dataset.action === "admin-cleanup-delete") {
+          await deleteAdminMonthData(fields);
+          adminCleanupPreview = null;
+          successMessage = "Selected month data deleted.";
+        }
         if (!shouldRefresh) return;
         form.reset();
         await loadData();
@@ -1929,12 +2129,7 @@ function bindForms() {
   });
   document.querySelectorAll("[data-action='close-modal']").forEach((button) => {
     button.addEventListener("click", () => {
-      createBookingContext = null;
-      bookingActionContext = null;
-      guestProfileContext = null;
-      editBookingContext = null;
-      cancelBookingContext = null;
-      transactionContext = null;
+      closeAllModals();
       render();
     });
   });
@@ -2162,6 +2357,11 @@ function bindBookingActionButtons() {
         if (action === "archive") {
           await archiveBooking(booking);
         }
+        if (action === "confirm") {
+          bookingActionContext = null;
+          confirmBookingDeposit = { booking };
+          render();
+        }
         if (action === "payment") {
           transactionContext = { booking, account_type: "Revenue", title: "Record Payment", description: "Booking payment" };
           bookingActionContext = null;
@@ -2336,6 +2536,64 @@ async function cancelBooking(fields) {
   bookingActionContext = { booking: after };
 }
 
+function bindDatePickerOpeners() {
+  document.querySelectorAll('input[type="date"]').forEach((input) => {
+    input.addEventListener("click", () => {
+      input.showPicker?.();
+    });
+  });
+}
+
+function bindModalBackdropClose() {
+  document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
+    backdrop.addEventListener("click", (event) => {
+      if (event.target !== backdrop) return;
+      closeAllModals();
+      render();
+    });
+  });
+}
+
+function closeAllModals() {
+  createBookingContext = null;
+  bookingActionContext = null;
+  guestProfileContext = null;
+  editBookingContext = null;
+  cancelBookingContext = null;
+  transactionContext = null;
+  confirmBookingDeposit = null;
+  checkinPayment = null;
+  checkoutSettlement = null;
+}
+
+async function confirmBookingWithDeposit(fields) {
+  const booking = state.bookings.find((item) => item.id === fields.booking_id);
+  if (!booking) throw new Error("Booking not found.");
+  if (booking.status !== "Deposit Requested") throw new Error("Only Deposit Requested bookings can be confirmed here.");
+  const amount = Number(fields.deposit_amount || 0);
+  const depositDue = depositBalanceDue(booking);
+  const alreadyReceived = Number(booking.total_deposit_received || 0);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("Security deposit amount cannot be negative.");
+  if (amount > depositDue) throw new Error("Security deposit payment cannot be higher than remaining deposit balance.");
+  if (amount <= 0 && alreadyReceived <= 0) throw new Error("Record the received security deposit or reservation fee before confirming.");
+  if (amount > 0 && !fields.deposit_wallet_id) throw new Error("Deposit wallet is required.");
+  if (amount > 0) {
+    await recordAutomatedLedger({
+      booking_id: booking.id,
+      wallet_id: fields.deposit_wallet_id,
+      account_type: "Security Deposit Liability",
+      amount,
+      description: fields.notes?.trim() || "Security deposit received before booking confirmation",
+      reference_number: fields.reference_number,
+      proof_note: fields.proof_note
+    });
+  }
+  const [after] = await update("bookings", booking.id, { status: "Confirmed" });
+  await createAudit("booking", booking.id, "status_change", booking, after, "Booking confirmed after payment verification");
+  confirmBookingDeposit = null;
+  bookingActionContext = null;
+}
+
 async function archiveBooking(booking) {
   if (!["Completed", "Cancelled", "Refunded"].includes(booking.status)) {
     throw new Error("Only Completed, Cancelled, or Refunded bookings can be archived.");
@@ -2466,26 +2724,20 @@ async function recordElectricityReading(fields) {
 }
 
 async function deleteBookingForTesting(booking) {
+  if (!isManagerViewUnlocked()) throw new Error("Manager View is required for testing deletes.");
   const managerCode = window.prompt("Enter Manager Security Code");
   if (!managerCode) return;
 
-  const allowed = await rpc("verify_booking_delete_code", {
-    input_booking_id: booking.id,
-    manager_code: managerCode
-  });
-  if (!allowed) {
-    showMessage("Wrong Manager Security Code.");
-    return;
-  }
-
-  const confirmed = window.confirm(`Delete Booking ${booking.booking_code}?\n\nThis action cannot be undone.`);
-  if (!confirmed) return;
+  const expected = `DELETE ${booking.booking_code}`;
+  const confirmation = window.prompt(`Type ${expected} to permanently delete this test booking and all linked records.`);
+  if (confirmation !== expected) throw new Error(`Confirmation text must exactly match ${expected}.`);
 
   const deleted = await rpc("delete_test_booking", {
     input_booking_id: booking.id,
-    manager_code: managerCode
+    manager_code: managerCode,
+    confirmation_text: confirmation
   });
-  if (!deleted) throw new Error("This booking contains financial records. Use Cancel/Archive instead.");
+  if (!deleted) throw new Error("Booking delete failed.");
 
   bookingActionContext = null;
   await loadData();
@@ -2618,18 +2870,49 @@ async function updateAutomationStatus(id, status, errorMessage = "") {
 
 async function sendQueuedEmail(id) {
   if (!id) throw new Error("Queue an email first.");
-  const response = await fetch("/api/automation/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ queue_id: id })
-  });
-  const data = await response.json();
-  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Email sending failed.");
+  let response;
+  try {
+    response = await fetch("/api/automation/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queue_id: id })
+    });
+  } catch (error) {
+    const reason = `Email server unreachable: ${error.message}`;
+    await markAutomationFailed(id, reason);
+    throw new Error(reason);
+  }
+
+  const raw = await response.text();
+  let data = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    const reason = `Email server returned an unreadable response: ${raw.slice(0, 180) || response.statusText}`;
+    await markAutomationFailed(id, reason);
+    throw new Error(reason);
+  }
+
+  if (!response.ok || data?.ok === false) {
+    const reason = data?.error || response.statusText || "Email sending failed.";
+    await markAutomationFailed(id, reason);
+    throw new Error(reason);
+  }
   return data;
+}
+
+async function markAutomationFailed(id, reason) {
+  try {
+    await updateAutomationStatus(id, "failed", reason);
+  } catch (error) {
+    throw new Error(`${reason} Also failed to update automation status: ${error.message}`);
+  }
 }
 
 async function sendBookingAutomationNow(bookingId, type) {
   if (type !== "booking_confirmation") throw new Error("Only booking confirmation email can be sent.");
+  const booking = state.bookings.find((item) => item.id === bookingId);
+  if (booking?.status !== "Confirmed") throw new Error("Confirm booking first before sending confirmation email.");
   await queueBookingAutomation(bookingId, type);
   const rows = await select("automation_queue", {
     query: `booking_id=eq.${encodeURIComponent(bookingId)}&automation_type=eq.${encodeURIComponent(type)}&limit=1`
@@ -2828,6 +3111,41 @@ async function changeManagerCode(fields) {
   if (!ok) throw new Error("Wrong Manager Security Code.");
   resetAttempts(managerAttemptsKey);
   securityUnlocked = false;
+}
+
+async function previewAdminMonthCleanup(fields) {
+  if (!isManagerViewUnlocked()) throw new Error("Manager View is required for Admin Tools.");
+  const result = await rpc("admin_delete_data_by_month", {
+    input_year: Number(fields.input_year),
+    input_month: Number(fields.input_month),
+    manager_code: fields.manager_code,
+    confirmation_text: "",
+    dry_run: true
+  });
+  adminCleanupPreview = {
+    ...result,
+    input_year: Number(fields.input_year),
+    input_month: Number(fields.input_month)
+  };
+}
+
+async function deleteAdminMonthData(fields) {
+  if (!isManagerViewUnlocked()) throw new Error("Manager View is required for Admin Tools.");
+  if (!adminCleanupPreview) throw new Error("Run preview before deleting month data.");
+  if (Number(fields.input_year) !== Number(adminCleanupPreview.input_year)
+      || Number(fields.input_month) !== Number(adminCleanupPreview.input_month)) {
+    throw new Error("Preview month changed. Run preview again.");
+  }
+  if (fields.confirmation_text !== adminCleanupPreview.expected_confirmation) {
+    throw new Error(`Confirmation text must exactly match ${adminCleanupPreview.expected_confirmation}.`);
+  }
+  await rpc("admin_delete_data_by_month", {
+    input_year: Number(fields.input_year),
+    input_month: Number(fields.input_month),
+    manager_code: fields.manager_code,
+    confirmation_text: fields.confirmation_text,
+    dry_run: false
+  });
 }
 
 async function createAudit(entity_type, entity_id, action, before_data, after_data, reason = "") {
@@ -3219,6 +3537,14 @@ function dateInputValue(date) {
 
 function todayInputValue() {
   return dateInputValue(new Date());
+}
+
+function monthOptions(selectedMonth) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const value = index + 1;
+    const label = new Date(2026, index, 1).toLocaleString([], { month: "long" });
+    return `<option value="${value}" ${Number(selectedMonth) === value ? "selected" : ""}>${label}</option>`;
+  }).join("");
 }
 
 function addDaysToDateInput(value, days) {

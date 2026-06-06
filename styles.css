@@ -288,6 +288,16 @@ button.primary:hover:not(:disabled) {
 
 button.danger { border-color: rgba(248,113,113,0.2); color: var(--danger); }
 button.danger:hover:not(:disabled) { background: rgba(248,113,113,0.07); border-color: rgba(248,113,113,0.4); }
+button.danger-button {
+  background: rgba(248,113,113,0.09);
+  border-color: rgba(248,113,113,0.35);
+  color: #fecaca;
+  font-weight: 700;
+}
+button.danger-button:hover:not(:disabled) {
+  background: rgba(248,113,113,0.16);
+  border-color: rgba(248,113,113,0.55);
+}
 
 /* ─── Inputs ─────────────────────────────────────────────────────── */
 
@@ -313,6 +323,7 @@ textarea { min-height: 72px; resize: vertical; }
 .grid { display: grid; gap: 14px; }
 .grid.two   { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .grid.three { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.grid.four  { grid-template-columns: repeat(4, minmax(0,1fr)); }
 
 .panel {
   background: var(--panel);
@@ -350,6 +361,45 @@ pre {
 }
 
 .subsection h3 { margin: 0 0 12px; }
+
+.admin-danger-zone {
+  border-color: rgba(248,113,113,0.22);
+  box-shadow: inset 0 0 0 1px rgba(248,113,113,0.04);
+}
+
+.danger-text { color: var(--danger); }
+
+.danger-pill {
+  background: rgba(248,113,113,0.1);
+  border-color: rgba(248,113,113,0.32);
+  color: #fecaca;
+}
+
+.danger-note {
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.18);
+  border-radius: var(--r-xs);
+  color: rgba(254,226,226,0.9);
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+
+.danger-note.strong {
+  border-color: rgba(248,113,113,0.35);
+}
+
+.admin-preview {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.admin-preview code {
+  color: #fecaca;
+  font-weight: 800;
+}
 
 .check-field { align-items: center; display: flex; gap: 8px; margin: 10px 0; }
 .check-field input { min-height: auto; width: auto; }
@@ -404,6 +454,8 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
 .page-stack     { display: flex; flex-direction: column; gap: 16px; }
 .page-header    { align-items: center; display: flex; justify-content: space-between; margin-bottom: 4px; }
 .page-title     { color: #fff8e8; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; margin: 0; }
+.section-heading { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
+.section-heading h2 { margin: 0; }
 
 /* ─── Pills / Badges ─────────────────────────────────────────────── */
 
@@ -421,7 +473,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
 
 .pill-inquiry           { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); color: var(--muted); }
 .pill-tentative         { background: rgba(251,191,36,0.1);   border-color: rgba(251,191,36,0.28);  color: #fbbf24; }
-.pill-deposit-requested { background: rgba(129,140,248,0.1);  border-color: rgba(129,140,248,0.28); color: #a5b4fc; }
+.pill-deposit-requested { background: rgba(251,191,36,0.12);  border-color: rgba(251,191,36,0.34); color: #fbbf24; }
 .pill-deposit-received  { background: rgba(20,184,166,0.1);   border-color: rgba(20,184,166,0.28);  color: #2dd4bf; }
 .pill-confirmed         { background: rgba(34,197,94,0.1);    border-color: rgba(34,197,94,0.28);   color: #4ade80; }
 .pill-checked-in        { background: rgba(34,197,94,0.15);   border-color: rgba(34,197,94,0.45);   color: #4ade80; }
@@ -731,11 +783,14 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
 .day-segment { bottom: 0; display: block; left: 0; opacity: 0.35; position: absolute; top: 0; width: 100%; }
 .day-segment.checkin        { background: #35d46f; clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
 .day-segment.reserved-checkin { background: #1c7c45; clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
+.day-segment.deposit-requested-checkin,
+.day-segment.tentative-checkin { background: #fbbf24; clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
 .day-segment.checkout       { background: #ff6666; clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%); }
 .day-segment.occupied, .day-segment.full { background: #35d46f; }
 .day-segment.reserved       { background: #1c7c45; }
 .day-segment.completed      { background: #64748b; }
 .day-segment.tentative      { background: #b78c35; }
+.day-segment.deposit-requested { background: #fbbf24; }
 
 /* ─── Modals ─────────────────────────────────────────────────────── */
 
@@ -920,7 +975,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
 
 .booking-card.s-inquiry          { border-left-color: rgba(143,163,151,0.35); }
 .booking-card.s-tentative        { border-left-color: #fbbf24; }
-.booking-card.s-deposit-requested{ border-left-color: #818cf8; }
+.booking-card.s-deposit-requested{ border-left-color: #fbbf24; }
 .booking-card.s-deposit-received { border-left-color: #2dd4bf; }
 .booking-card.s-confirmed        { border-left-color: #4ade80; }
 .booking-card.s-checked-in       { border-left-color: #22c55e; }
@@ -1085,7 +1140,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.015); }
   main { padding: 12px; }
 
   /* ── Grid helpers ─────────────────────────────────────────────── */
-  .grid.two, .grid.three { grid-template-columns: 1fr; }
+  .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
 
   /* ── Panels / subsections ─────────────────────────────────────── */
   .panel    { border-radius: 10px; padding: 14px; }

@@ -3,19 +3,27 @@ import { readFile } from "node:fs/promises";
 const sender = "The Resthouse Zamboanga <bookings@theresthousezamboanga.com>";
 const replyTo = "theresthousezamboanga@gmail.com";
 const contactPhone = "0954 195 4478";
-const confirmationAttachmentFiles = [
-  "TRZ HOUSE RULES.pdf",
-  "Penalties and Damages.pdf",
-  "TRZ LOCATION.pdf"
+const resortLocation = "Tala Road, Brgy. Lumbangan, Zamboanga City";
+const mapLink = "https://maps.google.com/?q=The+Resthouse+Zamboanga+Tala+Road+Lumbangan+Zamboanga+City";
+const inlineImageFiles = [
+  ["trz-hero", "hero.jpg"],
+  ["trz-pool", "pool.jpg"],
+  ["trz-ktv", "ktv.jpg"],
+  ["trz-game", "game.jpg"],
+  ["trz-bedroom", "bedroom.jpg"],
+  ["trz-location", "location-map.jpg"],
+  ["trz-logo", "logo.png"]
 ];
 
 export async function sendAutomationEmail({ queueId, env }) {
   if (!queueId) throw new Error("Automation queue id is required.");
 
-  const config = supabaseConfig(env);
-  const queue = await fetchSingle(config, "automation_queue", queueId);
+  let config;
+  let queue;
 
   try {
+    config = supabaseConfig(env);
+    queue = await fetchSingle(config, "automation_queue", queueId);
     if (queue.status === "sent") return { ok: true, message: "Email already marked as sent." };
     if (queue.status === "skipped") throw new Error("Skipped email cannot be sent.");
     if (queue.automation_type !== "booking_confirmation") throw new Error("Only booking confirmation email sending is enabled.");
@@ -26,14 +34,17 @@ export async function sendAutomationEmail({ queueId, env }) {
     const guest = await fetchSingle(config, "guests", booking.guest_id);
     const packageVersion = await fetchSingle(config, "package_versions", booking.package_version_id);
     const bookingPackage = await fetchSingle(config, "packages", packageVersion.package_id);
-    const message = await buildBookingConfirmationEmail({ queue, booking, guest, bookingPackage });
+    const message = await buildBookingConfirmationEmail({ queue, booking, guest, packageVersion, bookingPackage });
     const emailPayload = {
       from: sender,
       to: [queue.guest_email],
-      reply_to: replyTo,
       subject: message.subject,
       html: message.html,
-      text: message.text
+      text: message.text,
+      headers: {
+        "X-Entity-Ref-ID": `${queue.booking_id}-${queue.id}`,
+        "X-Transaction-Type": "booking_confirmation"
+      }
     };
     if (message.attachments?.length) emailPayload.attachments = message.attachments;
 
@@ -54,15 +65,24 @@ export async function sendAutomationEmail({ queueId, env }) {
     await setQueueStatus(config, queue.id, "sent", null);
     return { ok: true, message: "Email sent." };
   } catch (error) {
-    await setQueueStatus(config, queue.id, "failed", error.message);
-    throw error;
+    const reason = readableError(error);
+    if (config && queue?.id) {
+      try {
+        await setQueueStatus(config, queue.id, "failed", reason);
+      } catch (statusError) {
+        throw new Error(`${reason} Also failed to update automation status: ${readableError(statusError)}`);
+      }
+    }
+    throw new Error(reason);
   }
 }
 
-async function buildBookingConfirmationEmail({ queue, booking, guest, bookingPackage }) {
-  const subject = queue.subject || `Booking Confirmation - ${booking.booking_code}`;
-  const checkIn = formatDate(booking.start_at);
-  const checkOut = formatDate(booking.end_at);
+async function buildBookingConfirmationEmail({ queue, booking, guest, packageVersion, bookingPackage }) {
+  const subject = queue.subject || `Your Booking is Confirmed · ${booking.booking_code}`;
+  const checkInDate = formatDateOnly(booking.start_at);
+  const checkOutDate = formatDateOnly(booking.end_at);
+  const checkInTime = formatTimeOnly(booking.start_at);
+  const checkOutTime = formatTimeOnly(booking.end_at);
   const packageName = bookingPackage?.name || "Selected package";
   const pax = booking.pax_count || "Not set";
   const packagePrice = money(booking.base_price);
@@ -70,96 +90,316 @@ async function buildBookingConfirmationEmail({ queue, booking, guest, bookingPac
   const depositReceived = money(booking.total_deposit_received);
   const depositRefunded = money(booking.total_deposit_refunded);
   const packageBalance = money(Math.max(Number(booking.base_price || 0) - Number(booking.total_revenue || 0), 0));
+  const inclusions = packageInclusions(bookingPackage, packageVersion);
+  const careItems = [
+    ["Bedroom & Furniture", "Keep beds, linens, towels, curtains, and furniture clean and undamaged. Charges apply for damage or stains."],
+    ["Electronics & Appliances", "Handle TVs, remotes, and appliances with care. Damage beyond normal use may require repair or replacement fees."],
+    ["KTV Equipment", "Treat microphones, speakers, and karaoke units gently so every group can enjoy them."],
+    ["Game Room", "Use billiard tables, darts, and game items responsibly. Damaged or missing items may be charged."],
+    ["Pool Area", "Keep the pool area clean and safe. Contamination, damage, or misuse may require cleaning or repair fees."],
+    ["Your Belongings", "Please look after your personal items. The resort is not liable for lost or misplaced belongings."],
+    ["Special Requests", "For special requests, please message us before 7:00 PM during your stay so we can assist properly."]
+  ];
+  const reminders = [
+    ["Registered Guests Only", "Only guests listed in your booking are permitted inside the resort premises."],
+    ["No Pets Allowed", "For everyone's comfort, a PHP 5,000 violation fee applies for pets brought inside the resort."],
+    ["No Smoking in Rooms", "Smoking is strictly prohibited inside rooms. Designated outdoor areas are available."],
+    ["Overnight Visitors", "Visitors staying beyond 12 midnight are considered overnight guests and may be charged per person."],
+    ["Sleep in Bedrooms Only", "Please do not sleep overnight in the KTV room, billiard room, VIP room, or common area sofas."],
+    ["Leave It Clean (CLAYGO)", "Help us keep the resort beautiful and enjoyable for every guest."],
+    ["Security & CCTV", "Security cameras monitor common areas for the safety and comfort of all guests."],
+    ["Drinks & Corkage", "Please coordinate with us for drink corkage matters before or during your stay."]
+  ];
   const text = [
-    "The Resthouse Zamboanga",
-    "Booking Confirmed",
+    `Booking Confirmed — ${booking.booking_code}`,
+    `Check-in:  ${checkInDate} at ${checkInTime}`,
+    `Check-out: ${checkOutDate} at ${checkOutTime}`,
     "",
-    `Guest Name: ${guest.full_name}`,
-    `Booking Code: ${booking.booking_code}`,
-    `Check-in: ${checkIn}`,
-    `Check-out: ${checkOut}`,
+    "The Resthouse Zamboanga",
+    "Your Private Paradise. Your Home Away From Home.",
+    "",
+    `Guest: ${guest.full_name}`,
     `Package: ${packageName}`,
-    `Pax: ${pax}`,
-    `Package Price: ${packagePrice}`,
+    `Guests: ${pax} pax`,
     "",
     "Payment Summary",
+    `Package Price: ${packagePrice}`,
     `Security Deposit Required: ${depositRequired}`,
     `Security Deposit Paid: ${depositReceived}`,
     `Security Deposit Refunded: ${depositRefunded}`,
-    `Package Balance Due: ${packageBalance}`,
+    `Balance Due: ${packageBalance}`,
     "",
-    "Arrival Reminders",
-    "Please review the attached house rules, penalties and damages guide, and location guide before arrival.",
-    "Message us if your arrival time changes.",
+    "Package Inclusions",
+    ...inclusions.map((item) => `✓ ${item}`),
     "",
-    "Attached Documents",
-    "House Rules",
-    "Penalties & Damages",
-    "Location Map",
+    "Your Stay Guide",
+    ...reminders.map(([title, body], i) => `${i + 1}. ${title} — ${body}`),
     "",
-    "Contact Details",
-    `Email: ${replyTo}`,
-    `Contact: ${contactPhone}`
+    "Caring for Your Home Away",
+    ...careItems.map(([title, body]) => `• ${title}: ${body}`),
+    "",
+    "Getting Here",
+    "The Resthouse Zamboanga",
+    resortLocation,
+    `Map: ${mapLink}`,
+    "",
+    "Contact Us",
+    `Call: ${contactPhone}`,
+    `Email: ${replyTo}`
   ].join("\n");
-  const html = `
-    <div style="font-family:Arial,sans-serif;background:#00140b;color:#f2f7f0;padding:28px">
-      <div style="max-width:680px;margin:0 auto">
-        <div style="text-align:center;padding:18px 0 28px">
-          <div style="display:inline-block;border:1px solid #b08a2e;color:#ffd966;border-radius:4px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.12em">TRZ</div>
-          <h1 style="margin:16px 0 4px;font-size:24px;line-height:1.2;color:#ffffff">The Resthouse Zamboanga</h1>
-          <div style="font-size:11px;letter-spacing:.16em;color:#caa640;text-transform:uppercase">Zamboanga City, Philippines</div>
-        </div>
-        <div style="background:#082313;border:1px solid #15592d;border-radius:12px;overflow:hidden">
-          <div style="background:#0d3b1c;padding:28px 28px 24px;border-bottom:1px solid #1c6b37">
-            <div style="display:inline-block;background:#0d5c2d;color:#9cffc0;border:1px solid #20a34f;border-radius:999px;padding:7px 14px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Booking Confirmed</div>
-            <h2 style="margin:18px 0 6px;font-size:27px;line-height:1.15;color:#ffffff">${escapeHtml(guest.full_name)}</h2>
-            <div style="font-size:13px;color:#b8c8bb">${escapeHtml(guest.phone || "")}</div>
-          </div>
-          <div style="padding:28px">
-            <p style="margin:0 0 22px;color:#f4f7f2;line-height:1.7">We're delighted to confirm your reservation at <strong>The Resthouse Zamboanga</strong>. We look forward to welcoming you and your group for an unforgettable stay.</p>
-            <div style="background:#071b10;border:1px solid #12351f;border-radius:9px;padding:22px;margin-bottom:18px">
-              <h3 style="margin:0 0 14px;color:#8f9b91;font-size:12px;letter-spacing:.12em;text-transform:uppercase">Reservation Details</h3>
-              <table style="width:100%;border-collapse:collapse">
-                ${detailRow("Guest Name", guest.full_name)}
-                ${detailRow("Booking Code", booking.booking_code)}
-                ${detailRow("Check-in", checkIn)}
-                ${detailRow("Check-out", checkOut)}
-                ${detailRow("Package", packageName)}
-                ${detailRow("Guests", `${pax} pax`)}
-              </table>
-            </div>
-            <div style="background:#101f11;border:1px solid #637a25;border-radius:9px;padding:22px;margin-bottom:18px">
-              <h3 style="margin:0 0 14px;color:#d4b34d;font-size:12px;letter-spacing:.12em;text-transform:uppercase">Payment Summary</h3>
-              <table style="width:100%;border-collapse:collapse">
-                ${detailRow("Package Price", packagePrice)}
-                ${detailRow("Security Deposit Required", depositRequired)}
-                ${detailRow("Security Deposit Paid", depositReceived)}
-                ${detailRow("Security Deposit Refunded", depositRefunded)}
-                ${detailRow("Package Balance Due", packageBalance)}
-              </table>
-            </div>
-            <div style="background:#062715;border:1px solid #19733b;border-radius:9px;padding:22px;margin-bottom:18px">
-              <h3 style="margin:0 0 14px;color:#22b765;font-size:12px;letter-spacing:.12em;text-transform:uppercase">Arrival Reminders</h3>
-              <p style="margin:0 0 8px;color:#eef5ef">- <strong>Check-in:</strong> 3:00 PM onwards</p>
-              <p style="margin:0 0 8px;color:#eef5ef">- <strong>Check-out:</strong> 12:00 PM (Noon)</p>
-              <p style="margin:0 0 8px;color:#eef5ef">- Bring a valid government-issued ID</p>
-              <p style="margin:0;color:#eef5ef">- Review the house rules and attached documents</p>
-            </div>
-            <div style="margin:20px 0 22px">
-              <h3 style="margin:0 0 12px;color:#6f7d71;font-size:12px;letter-spacing:.12em;text-transform:uppercase">Attached Documents</h3>
-              <span style="display:inline-block;margin:0 8px 8px 0;border:1px solid #ba9b3d;color:#f1d36b;border-radius:5px;padding:9px 13px;font-weight:700;font-size:12px">House Rules -></span>
-              <span style="display:inline-block;margin:0 8px 8px 0;border:1px solid #ba9b3d;color:#f1d36b;border-radius:5px;padding:9px 13px;font-weight:700;font-size:12px">Penalties &amp; Damages -></span>
-              <span style="display:inline-block;margin:0 8px 8px 0;border:1px solid #ba9b3d;color:#f1d36b;border-radius:5px;padding:9px 13px;font-weight:700;font-size:12px">Location Map -></span>
-            </div>
-            <p style="margin:0;color:#e7eee7;line-height:1.7">Questions or changes? Call us at <strong style="color:#f1d36b">${escapeHtml(contactPhone)}</strong> or email <a style="color:#f1d36b" href="mailto:${escapeHtml(replyTo)}">${escapeHtml(replyTo)}</a>. We're happy to help.</p>
-          </div>
-        </div>
-        <div style="text-align:center;color:#687b6c;font-size:12px;padding:24px 12px">
-          <div>${escapeHtml(contactPhone)} - ${escapeHtml(replyTo)}</div>
-          <div style="margin-top:10px">You received this because of a reservation at The Resthouse Zamboanga.</div>
-        </div>
-      </div>
-    </div>`;
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      @media only screen and (max-width: 640px) {
+        .trz-container { width: 100% !important; }
+        .trz-pad { padding-left: 18px !important; padding-right: 18px !important; }
+        .trz-stack { display: block !important; width: 100% !important; }
+        .trz-stack-r { padding-left: 0 !important; padding-top: 10px !important; }
+        .trz-photo { height: auto !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:#ece7de;font-family:Georgia,'Times New Roman',serif;color:#17251c;">
+    <span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;">${escapeHtml(booking.booking_code)} confirmed &mdash; Check-in ${escapeHtml(checkInDate)} at ${escapeHtml(checkInTime)}.</span>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ece7de;border-collapse:collapse;">
+      <tr>
+        <td align="center" style="padding:24px 0 44px;">
+          <table role="presentation" class="trz-container" width="680" cellspacing="0" cellpadding="0" style="width:680px;max-width:680px;border-collapse:collapse;background:#fffaf3;">
+
+            <!-- HERO: exterior shot, cropped to tighten on the resort rather than open sky / edges -->
+            <tr>
+              <td style="line-height:0;font-size:0;padding:0;background:#041109;border-radius:14px 14px 0 0;">
+                <img src="cid:trz-hero" width="680" alt="The Resthouse Zamboanga" style="display:block;width:100%;max-width:680px;height:360px;object-fit:cover;object-position:28% 30%;border:0;border-radius:14px 14px 0 0;">
+              </td>
+            </tr>
+
+            <!-- BRAND HEADER -->
+            <tr>
+              <td class="trz-pad" style="background:#041109;padding:30px 40px 36px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr><td style="border-bottom:1px solid rgba(215,177,84,.4);padding-bottom:14px;">
+                    <span style="font-family:Arial,sans-serif;font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#d7b154;">The Resthouse Zamboanga &nbsp;&middot;&nbsp; Zamboanga City, Philippines</span>
+                  </td></tr>
+                  <tr><td style="padding-top:20px;">
+                    <p style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#d7b154;">Booking Confirmed</p>
+                    <h1 style="margin:0 0 8px;font-size:44px;line-height:1.05;color:#ffffff;font-weight:700;">Your Stay Awaits.</h1>
+                    <p style="margin:0;font-size:17px;font-style:italic;color:#d7b154;line-height:1.4;">Your Private Paradise. Your Home Away From Home.</p>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- BOOKING SUMMARY CARD -->
+            <tr>
+              <td class="trz-pad" style="padding:24px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#06331e;border:1px solid rgba(215,177,84,.55);border-radius:14px;">
+                  <tr>
+                    <td colspan="2" style="padding:24px 28px 18px;border-bottom:1px solid rgba(255,255,255,.1);">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                        <tr>
+                          <td style="vertical-align:top;">
+                            <p style="margin:0 0 2px;font-style:italic;color:#c8dfc8;font-family:Arial,sans-serif;font-size:13px;">Welcome,</p>
+                            <h2 style="margin:0;font-size:28px;line-height:1.1;color:#ffffff;">${escapeHtml(guest.full_name)}</h2>
+                          </td>
+                          <td style="vertical-align:top;text-align:right;">
+                            <p style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#c8dfc8;">Booking Code</p>
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-left:auto;">
+                              <tr><td style="background:rgba(215,177,84,.18);border:1px solid #d7b154;border-radius:999px;padding:7px 18px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#f4d375;white-space:nowrap;">${escapeHtml(booking.booking_code)}</td></tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="trz-stack" width="50%" style="padding:20px 28px;border-right:1px solid rgba(255,255,255,.1);vertical-align:top;">
+                      <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d7b154;">Check-in</p>
+                      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">${escapeHtml(checkInDate)}</p>
+                      <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:14px;color:#c8dfc8;">${escapeHtml(checkInTime)}</p>
+                    </td>
+                    <td class="trz-stack" width="50%" style="padding:20px 28px;vertical-align:top;">
+                      <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d7b154;">Check-out</p>
+                      <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;line-height:1.2;">${escapeHtml(checkOutDate)}</p>
+                      <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:14px;color:#c8dfc8;">${escapeHtml(checkOutTime)}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding:0 28px 22px;border-top:1px solid rgba(255,255,255,.1);">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                        <tr>
+                          ${miniDetail("Package", packageName)}
+                          ${miniDetail("Guests", `${pax} pax`)}
+                          ${miniDetail("Resort Line", contactPhone)}
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- PAYMENT SUMMARY -->
+            <tr>
+              <td class="trz-pad" style="padding:16px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e4ded3;border-radius:14px;">
+                  <tr><td style="padding:20px 26px 18px;">
+                    <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#9aaa9e;">Payment Summary</p>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                      <tr>
+                        ${paymentCell("Package Price", packagePrice, false)}
+                        ${paymentCell("Deposit Required", depositRequired, false)}
+                        ${paymentCell("Deposit Paid", depositReceived, false)}
+                        ${paymentCell("Balance Due", packageBalance, true)}
+                      </tr>
+                    </table>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- QUICK INFO ROW -->
+            <tr>
+              <td class="trz-pad" style="padding:14px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#f4f0e8;border-radius:12px;">
+                  <tr>
+                    ${quickInfo("Check-in Time", checkInTime, "Let us know if you are arriving early.")}
+                    ${quickInfo("Check-out Time", checkOutTime, "Late check-out subject to availability.")}
+                    ${quickInfo("Resort Line", contactPhone, "We are here throughout your stay.")}
+                    ${quickInfo("Address", "Lumbangan, ZC", "Tala Road, Brgy. Lumbangan")}
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            ${sectionDivider("Explore The Resthouse")}
+
+            <!-- 2×2 GALLERY WITH CAPTIONS -->
+            <tr>
+              <td class="trz-pad" style="padding:0 28px 6px;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr>
+                    ${galleryCard("cid:trz-pool", "Pool Area")}
+                    ${galleryCard("cid:trz-ktv", "KTV Room")}
+                  </tr>
+                  <tr>
+                    ${galleryCard("cid:trz-game", "Game Room")}
+                    ${galleryCard("cid:trz-bedroom", "Bedroom")}
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            ${sectionDivider("Your Package")}
+
+            <!-- PACKAGE INCLUSIONS -->
+            <tr>
+              <td class="trz-pad" style="padding:4px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr>
+                    <td class="trz-stack" width="36%" style="background:#06331e;border-radius:12px;padding:28px 24px;vertical-align:top;">
+                      <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d7b154;">Your Package</p>
+                      <h2 style="margin:0 0 14px;font-size:24px;line-height:1.15;color:#ffffff;">${escapeHtml(packageName)}</h2>
+                      <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;line-height:1.65;color:#c8dfc8;">Everything curated for a comfortable, memorable stay at The Resthouse.</p>
+                    </td>
+                    <td class="trz-stack trz-stack-r" width="64%" style="padding:0 0 0 14px;vertical-align:top;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e4ded3;border-radius:12px;">
+                        <tr><td style="padding:22px 24px;">${inclusionGrid(inclusions)}</td></tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            ${sectionDivider("Your Stay Guide")}
+
+            <!-- STAY GUIDE: numbered cards -->
+            <tr>
+              <td class="trz-pad" style="padding:4px 28px 0;background:#fffaf3;">
+                ${stayGuideGrid(reminders)}
+              </td>
+            </tr>
+
+            ${sectionDivider("Caring for Your Home Away")}
+
+            <!-- CARE GUIDELINES: dark card grid -->
+            <tr>
+              <td class="trz-pad" style="padding:4px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#06331e;border-radius:14px;">
+                  <tr><td style="padding:6px 12px 20px;">${darkGuideGrid(careItems)}</td></tr>
+                </table>
+              </td>
+            </tr>
+
+            ${sectionDivider("Getting Here & Contact")}
+
+            <!-- LOCATION + CONTACT -->
+            <tr>
+              <td class="trz-pad" style="padding:4px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr>
+                    <td class="trz-stack" width="54%" style="padding:22px;background:#ffffff;border:1px solid #e4ded3;border-radius:12px;vertical-align:top;">
+                      <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#9aaa9e;">Our Location</p>
+                      <p style="margin:0 0 3px;font-size:17px;font-weight:700;color:#17251c;">The Resthouse Zamboanga</p>
+                      <p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#4e5b53;">${escapeHtml(resortLocation)}</p>
+                      <img src="cid:trz-location" width="300" alt="The Resthouse Zamboanga location map" style="display:block;width:100%;max-width:300px;height:auto;border:0;border-radius:8px;">
+                      <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:14px;">
+                        <tr><td style="background:#06331e;border-radius:8px;padding:10px 20px;">
+                          <a href="${mapLink}" style="font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#f4d375;text-decoration:none;">View on Google Maps &rarr;</a>
+                        </td></tr>
+                      </table>
+                    </td>
+                    <td class="trz-stack trz-stack-r" width="46%" style="padding:0 0 0 14px;vertical-align:top;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e4ded3;border-radius:12px;">
+                        <tr><td style="padding:22px;">
+                          <p style="margin:0 0 10px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#9aaa9e;">Need Assistance?</p>
+                          <p style="margin:0 0 18px;font-family:Arial,sans-serif;font-size:13px;line-height:1.65;color:#4e5b53;">We are here to make your stay as comfortable and memorable as possible.</p>
+                          <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-bottom:10px;">
+                            <tr><td style="background:#06331e;border-radius:8px;padding:10px 20px;">
+                              <a href="tel:${contactPhone.replace(/\s/g, "")}" style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#f4d375;text-decoration:none;">${escapeHtml(contactPhone)}</a>
+                            </td></tr>
+                          </table>
+                          <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-bottom:18px;">
+                            <tr><td style="background:#f4f0e8;border:1px solid #e4ded3;border-radius:8px;padding:10px 20px;">
+                              <a href="mailto:${replyTo}" style="font-family:Arial,sans-serif;font-size:13px;color:#17251c;text-decoration:none;">${escapeHtml(replyTo)}</a>
+                            </td></tr>
+                          </table>
+                          <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;line-height:1.55;color:#7a8a7e;font-style:italic;">For special requests, please message us before 7:00 PM during your stay so we can assist properly.</p>
+                        </td></tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- FOOTER -->
+            <tr>
+              <td class="trz-pad" style="padding:32px 40px 30px;background:#041109;border-radius:0 0 14px 14px;margin-top:28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr><td style="padding-bottom:18px;border-bottom:1px solid rgba(215,177,84,.35);text-align:center;">
+                    <img src="cid:trz-logo" width="220" alt="The Resthouse Zamboanga" style="display:block;margin:0 auto;width:220px;max-width:220px;height:auto;border:0;">
+                  </td></tr>
+                  <tr><td style="padding-top:18px;text-align:center;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;color:#c8dfc8;">
+                    Thank you for choosing <strong style="color:#f4d375;">The Resthouse Zamboanga.</strong><br>
+                    We look forward to welcoming you.<br>
+                    <span style="color:#7a8a7e;font-size:12px;">${escapeHtml(contactPhone)} &nbsp;&middot;&nbsp; ${escapeHtml(replyTo)}</span>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
   return {
     subject,
     html,
@@ -169,21 +409,155 @@ async function buildBookingConfirmationEmail({ queue, booking, guest, bookingPac
 }
 
 async function confirmationAttachments() {
-  return Promise.all(confirmationAttachmentFiles.map(async (filename) => {
-    const bytes = await readFile(new URL(`../documents/${filename}`, import.meta.url));
+  return Promise.all(inlineImageFiles.map(async ([contentId, filename]) => {
+    const bytes = await readFile(new URL(`./assets/${filename}`, import.meta.url));
     return {
       filename,
-      content: bytes.toString("base64")
+      content: bytes.toString("base64"),
+      content_id: contentId
     };
   }));
 }
 
-function detailRow(label, value) {
+function sectionDivider(title) {
   return `
     <tr>
-      <td style="border-bottom:1px solid #e2eadf;padding:9px 8px;color:#58705f;width:38%">${escapeHtml(label)}</td>
-      <td style="border-bottom:1px solid #e2eadf;padding:9px 8px;font-weight:700">${escapeHtml(value)}</td>
+      <td class="trz-pad" style="padding:28px 28px 16px;background:#fffaf3;text-align:center;">
+        <p style="margin:0 0 12px;font-size:20px;letter-spacing:.04em;color:#17251c;">${escapeHtml(title)}</p>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;"><tr>
+          <td style="border-top:1px solid #e4ded3;"></td>
+          <td width="48" style="border-top:2px solid #d7b154;"></td>
+          <td style="border-top:1px solid #e4ded3;"></td>
+        </tr></table>
+      </td>
     </tr>`;
+}
+
+function miniDetail(label, value) {
+  return `
+    <td class="trz-stack" width="33%" style="padding:12px 0 0;vertical-align:top;font-family:Arial,sans-serif;">
+      <span style="display:block;color:#d8c58d;font-size:10px;text-transform:uppercase;letter-spacing:.1em;">${escapeHtml(label)}</span>
+      <strong style="display:block;margin-top:4px;color:#ffffff;font-size:13px;line-height:1.35;">${escapeHtml(value)}</strong>
+    </td>`;
+}
+
+function paymentCell(label, value, highlight) {
+  return `
+    <td class="trz-stack" width="25%" style="padding:0 16px 0 0;border-right:${highlight ? "none" : "1px solid #eae3d8"};vertical-align:top;">
+      <p style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9aaa9e;">${escapeHtml(label)}</p>
+      <p style="margin:0;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:${highlight ? "#7a3800" : "#17251c"};">${escapeHtml(value)}</p>
+    </td>`;
+}
+
+function quickInfo(label, value, note) {
+  return `
+    <td class="trz-stack" width="25%" style="padding:14px 16px;vertical-align:top;border-right:1px solid #e6ded0;">
+      <p style="margin:0 0 6px;color:#7a8a7e;font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.1em;">${escapeHtml(label)}</p>
+      <p style="margin:0 0 6px;color:#17251c;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;font-weight:700;">${escapeHtml(value)}</p>
+      <p style="margin:0;color:#4e5b53;font-family:Arial,sans-serif;font-size:11px;line-height:1.5;">${escapeHtml(note)}</p>
+    </td>`;
+}
+
+function galleryCard(src, label) {
+  return `
+    <td class="trz-stack" width="50%" style="padding:4px;vertical-align:top;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+        <tr><td style="padding:0;line-height:0;font-size:0;background:#041109;">
+          <img class="trz-photo" src="${src}" width="330" alt="${escapeHtml(label)}" style="display:block;width:100%;max-width:330px;height:auto;border:0;">
+        </td></tr>
+        <tr><td style="background:#041109;padding:11px 16px;font-family:Arial,sans-serif;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#d7b154;">
+          ${escapeHtml(label)}
+        </td></tr>
+      </table>
+    </td>`;
+}
+
+function inclusionGrid(inclusions) {
+  const cells = inclusions.map((item, index) => {
+    const open = index % 2 === 0 ? "<tr>" : "";
+    const close = index % 2 === 1 ? "</tr>" : "";
+    return `${open}<td width="50%" style="padding:7px 8px;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#17251c;"><span style="color:#06331e;font-weight:700;">✓</span>&nbsp; ${escapeHtml(item)}</td>${close}`;
+  });
+  if (inclusions.length % 2) cells.push("<td></td></tr>");
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${cells.join("")}</table>`;
+}
+
+function stayGuideGrid(items) {
+  const rows = [];
+  for (let i = 0; i < items.length; i += 2) {
+    const left = items[i];
+    const right = items[i + 1];
+    rows.push(`
+      <tr>
+        <td class="trz-stack" width="50%" style="padding:5px;vertical-align:top;">${stayGuideCard(left, i + 1)}</td>
+        ${right
+          ? `<td class="trz-stack" width="50%" style="padding:5px;vertical-align:top;">${stayGuideCard(right, i + 2)}</td>`
+          : `<td width="50%"></td>`}
+      </tr>`);
+  }
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows.join("")}</table>`;
+}
+
+function stayGuideCard(item, num) {
+  const [title, body] = item;
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="height:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e2dacf;border-radius:10px;">
+      <tr><td style="padding:16px 18px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+          <tr>
+            <td width="34" style="vertical-align:top;padding-top:1px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                <tr><td style="width:28px;background:#06331e;border-radius:14px;text-align:center;padding:6px 8px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#f4d375;">${num}</td></tr>
+              </table>
+            </td>
+            <td style="vertical-align:top;padding-left:10px;">
+              <h3 style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#17251c;">${escapeHtml(title)}</h3>
+              <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#39483f;">${escapeHtml(body)}</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>`;
+}
+
+function darkGuideGrid(items) {
+  const cells = items.map(([title, body], index) => {
+    const open = index % 2 === 0 ? "<tr>" : "";
+    const close = index % 2 === 1 ? "</tr>" : "";
+    return `${open}<td class="trz-stack" width="50%" style="padding:7px;vertical-align:top;">${darkCard(title, body)}</td>${close}`;
+  });
+  if (items.length % 2) cells.push("<td></td></tr>");
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${cells.join("")}</table>`;
+}
+
+function darkCard(title, body) {
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="height:100%;border-collapse:collapse;border:1px solid rgba(215,177,84,.3);border-radius:8px;">
+      <tr><td style="padding:15px;text-align:center;">
+        <h3 style="margin:0 0 7px;font-family:Arial,sans-serif;font-size:13px;color:#f4d375;">${escapeHtml(title)}</h3>
+        <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#e8f4e8;">${escapeHtml(body)}</p>
+      </td></tr>
+    </table>`;
+}
+
+function packageInclusions(bookingPackage, packageVersion) {
+  const packageName = String(bookingPackage?.name || "").toLowerCase();
+  const rooms = Number(packageVersion?.included_rooms || 0);
+  const pax = Number(packageVersion?.included_pax || 0);
+  const base = [
+    `${pax || "Included"} pax`,
+    rooms ? `${rooms} rooms` : "Private resort use",
+    "Pool access",
+    "KTV room",
+    "Game room",
+    "Fast WiFi",
+    "24/7 security"
+  ];
+  if (packageVersion?.has_breakfast) base.splice(2, 0, "Breakfast included");
+  if (packageName.includes("day")) return ["Day Use stay", ...base];
+  if (packageName.includes("lite")) return ["Overnight stay", ...base];
+  if (packageName.includes("standard")) return ["Overnight stay", ...base];
+  return [packageVersion?.is_overnight ? "Overnight stay" : "Private stay", ...base];
 }
 
 function supabaseConfig(env) {
@@ -222,13 +596,33 @@ async function supabaseFetch(config, path, options = {}) {
     body: options.body
   });
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!response.ok) throw new Error(data?.message || data?.error || response.statusText);
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(text || response.statusText);
+  }
+  if (!response.ok) throw new Error(data?.message || data?.error || text || response.statusText);
   return data;
+}
+
+function readableError(error) {
+  return String(error?.message || error || "Email sending failed.").slice(0, 500);
 }
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "Not set";
+}
+
+function formatDateOnly(value) {
+  return value ? new Date(value).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "Not set";
+}
+
+function formatTimeOnly(value) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (date.getHours() === 12 && date.getMinutes() === 0) return "12:00 NN";
+  return date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
 }
 
 function money(value) {

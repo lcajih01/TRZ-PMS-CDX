@@ -27,11 +27,16 @@ createServer(async (req, res) => {
   const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
 
   if (req.method === "POST" && url.pathname === "/api/automation/send") {
+    let payload = {};
     try {
-      const payload = await readJson(req);
+      payload = await readJson(req);
       const result = await sendAutomationEmail({ queueId: payload.queue_id, env });
       sendJson(res, 200, result);
     } catch (error) {
+      console.error("[automation/send]", {
+        queue_id: payload.queue_id || null,
+        error: error.message
+      });
       sendJson(res, 500, { ok: false, error: error.message });
     }
     return;

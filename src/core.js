@@ -432,12 +432,34 @@ export function deleteTestBooking(state, bookingId, userId) {
   requirePermission(state, userId, "manage_bookings");
   const booking = state.bookings.find((item) => item.id === bookingId);
   if (!booking) throw new Error("Booking not found.");
-  const hasFinancialRecords = state.ledger_entries.some((entry) => entry.booking_id === bookingId);
-  if (hasFinancialRecords) throw new Error("This booking contains financial records. Use Cancel/Archive instead.");
+  const expenseIds = state.expenses.filter((expense) => expense.booking_id === bookingId).map((expense) => expense.id);
+  const drinkSaleIds = state.drink_sales.filter((sale) => sale.booking_id === bookingId).map((sale) => sale.id);
+  const drinkMovementIds = state.drink_inventory_movements.filter((movement) => movement.booking_id === bookingId).map((movement) => movement.id);
+  let ledgerEntryIds = state.ledger_entries
+    .filter((entry) => entry.booking_id === bookingId)
+    .map((entry) => entry.id);
+  ledgerEntryIds.push(
+    ...state.expenses.filter((expense) => expense.booking_id === bookingId && expense.ledger_entry_id).map((expense) => expense.ledger_entry_id),
+    ...state.drink_sales.filter((sale) => sale.booking_id === bookingId && sale.ledger_entry_id).map((sale) => sale.ledger_entry_id),
+    ...state.drink_inventory_movements.filter((movement) => movement.booking_id === bookingId && movement.ledger_entry_id).map((movement) => movement.ledger_entry_id)
+  );
+  ledgerEntryIds = [...new Set(ledgerEntryIds)];
+  const reversalIds = state.ledger_entries
+    .filter((entry) => ledgerEntryIds.includes(entry.reversed_entry_id) || (entry.reversed_entry_id && ledgerEntryIds.includes(entry.id)))
+    .flatMap((entry) => [entry.id, entry.reversed_entry_id])
+    .filter(Boolean);
+  ledgerEntryIds = [...new Set([...ledgerEntryIds, ...reversalIds])];
 
   state.security_deposits = state.security_deposits.filter((item) => item.booking_id !== bookingId);
+  if (state.automation_queue) state.automation_queue = state.automation_queue.filter((item) => item.booking_id !== bookingId);
+  state.drink_inventory_movements = state.drink_inventory_movements.filter((movement) => !drinkMovementIds.includes(movement.id) && !ledgerEntryIds.includes(movement.ledger_entry_id));
+  state.drink_sales = state.drink_sales.filter((sale) => !drinkSaleIds.includes(sale.id));
+  state.expenses = state.expenses.filter((expense) => !expenseIds.includes(expense.id));
+  state.ledger_lines = state.ledger_lines.filter((line) => !ledgerEntryIds.includes(line.ledger_entry_id));
+  state.ledger_entries = state.ledger_entries.filter((entry) => !ledgerEntryIds.includes(entry.id));
   state.bookings = state.bookings.filter((item) => item.id !== bookingId);
-  audit(state, userId, "booking", bookingId, "delete", booking, { booking_code: booking.booking_code, deleted: true }, "testing deletion");
+  const hasOtherBookings = state.bookings.some((item) => item.guest_id === booking.guest_id);
+  if (!hasOtherBookings) state.guests = state.guests.filter((guest) => guest.id !== booking.guest_id);
   return true;
 }
 

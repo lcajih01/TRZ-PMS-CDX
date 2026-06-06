@@ -257,10 +257,78 @@ assert.equal(walletBalance(state, cash.id), 10000);
 assert.equal(walletBalance(state, gcash.id), 0);
 assert.equal(refreshedBooking.total_revenue, 10000, "deposit liability must not be counted as revenue");
 
-assert.throws(
-  () => deleteTestBooking(state, booking.id, manager),
-  /financial records/
+const deleteGuest = createGuest(
+  state,
+  {
+    full_name: "Training Delete Guest",
+    phone: "09990000000",
+    email: "delete@example.test"
+  },
+  manager
 );
+const deleteBooking = createBooking(
+  state,
+  {
+    guest_id: deleteGuest.id,
+    package_version_id: originalDayUseVersion.id,
+    status: "Tentative",
+    start_at: "2026-06-29T15:00:00.000Z",
+    end_at: "2026-06-29T23:00:00.000Z",
+    pax_count: 12,
+    security_deposit_amount: 5000
+  },
+  manager
+);
+recordLedgerLine(
+  state,
+  {
+    booking_id: deleteBooking.id,
+    wallet_id: cash.id,
+    account_type: "Revenue",
+    amount: 3000,
+    entry_date: "2026-06-29",
+    description: "Training payment"
+  },
+  accounting
+);
+recordLedgerLine(
+  state,
+  {
+    booking_id: deleteBooking.id,
+    wallet_id: cash.id,
+    account_type: "Security Deposit Liability",
+    amount: 5000,
+    entry_date: "2026-06-29",
+    description: "Training deposit"
+  },
+  accounting
+);
+recordExpense(
+  state,
+  {
+    expense_date: "2026-06-29",
+    category: "Miscellaneous",
+    description: "Training linked expense",
+    vendor_payee: "Training",
+    amount: 500,
+    wallet_id: cash.id,
+    booking_id: deleteBooking.id,
+    notes: ""
+  },
+  accounting
+);
+assert.equal(walletBalance(state, cash.id), 17500);
+assert.equal(financeSummary(state, new Date("2026-06-29T08:00:00")).today_revenue, 3000);
+assert.equal(financeSummary(state, new Date("2026-06-29T08:00:00")).security_deposit_liability, 5000);
+deleteTestBooking(state, deleteBooking.id, manager);
+assert.equal(state.bookings.some((item) => item.id === deleteBooking.id), false);
+assert.equal(state.guests.some((item) => item.id === deleteGuest.id), false);
+assert.equal(state.ledger_entries.some((entry) => entry.booking_id === deleteBooking.id), false);
+assert.equal(state.expenses.some((expense) => expense.booking_id === deleteBooking.id), false);
+assert.equal(filterLedgerLines(state, { search: deleteBooking.booking_code }).length, 0);
+assert.equal(walletBalance(state, cash.id), 10000);
+assert.equal(financeSummary(state, new Date("2026-06-29T08:00:00")).today_revenue, 0);
+assert.equal(financeSummary(state, new Date("2026-06-29T08:00:00")).security_deposit_liability, 0);
 
 const expenseResult = recordExpense(
   state,

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#073f22" />
+    <title>Booking Request | The Resthouse Zamboanga</title>
+    <link rel="icon" href="./icons/icon-192.png" type="image/png" />
+    <link rel="stylesheet" href="./booking-request.css" />
+  </head>
+  <body>
+    <header class="request-hero">
+      <img src="./email/assets/logo.png" alt="The Resthouse Zamboanga" />
+      <p>Private and exclusive resort booking request</p>
+    </header>
+
+    <main class="request-shell">
+      <section class="request-card" id="formCard">
+        <div class="request-intro">
+          <p class="eyebrow">Booking Request Form</p>
+          <h1>Send your preferred stay details</h1>
+          <p>Our team will review your request and contact you for reservation fee or security deposit instructions.</p>
+        </div>
+
+        <section id="statusMessage" class="request-message" hidden></section>
+
+        <form id="bookingRequestForm">
+          <section class="form-section">
+            <h2><span>1</span> Stay Details</h2>
+            <label>
+              Arrival Date <strong>*</strong>
+              <input name="arrival_date" type="date" required />
+            </label>
+            <label>
+              Departure Date <strong>*</strong>
+              <input name="departure_date" type="date" required />
+            </label>
+            <label>
+              Package <strong>*</strong>
+              <select name="package_id" id="packageSelect" required>
+                <option value="">Loading packages...</option>
+              </select>
+            </label>
+            <label>
+              Number of Guests / Pax <strong>*</strong>
+              <input name="pax" type="number" min="1" inputmode="numeric" placeholder="e.g. 15" required />
+            </label>
+            <div id="packageDetails" class="package-details" aria-live="polite"></div>
+          </section>
+
+          <section class="form-section">
+            <h2><span>2</span> Guest Information</h2>
+            <label>
+              Full Name <strong>*</strong>
+              <input name="full_name" autocomplete="name" required />
+            </label>
+            <label>
+              Mobile Number <strong>*</strong>
+              <input name="mobile_number" autocomplete="tel" inputmode="tel" required />
+            </label>
+            <label>
+              Email Address <strong>*</strong>
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              City / Municipality
+              <input name="city_municipality" autocomplete="address-level2" />
+            </label>
+          </section>
+
+          <section class="form-section">
+            <h2><span>3</span> Occasion <em>Optional</em></h2>
+            <div class="choice-grid">
+              <label><input type="radio" name="occasion" value="Birthday" /> Birthday</label>
+              <label><input type="radio" name="occasion" value="Family Gathering" /> Family Gathering</label>
+              <label><input type="radio" name="occasion" value="Wedding" /> Wedding</label>
+              <label><input type="radio" name="occasion" value="Company Event" /> Company Event</label>
+              <label><input type="radio" name="occasion" value="Team Building" /> Team Building</label>
+              <label><input type="radio" name="occasion" value="Friends Getaway" /> Friends Getaway</label>
+              <label><input type="radio" name="occasion" value="Reunion" /> Reunion</label>
+              <label><input type="radio" name="occasion" value="Other" /> Other</label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h2><span>4</span> Special Requests <em>Optional</em></h2>
+            <label>
+              Additional information
+              <textarea name="special_requests" maxlength="500" rows="5" placeholder="Birthday setup, early arrival inquiry, or other notes"></textarea>
+            </label>
+            <p class="hint">Maximum 500 characters.</p>
+          </section>
+
+          <section class="form-section">
+            <h2><span>5</span> Agreement</h2>
+            <label class="check-line">
+              <input name="agree_house_rules" type="checkbox" required />
+              I have read and agree to the House Rules. <strong>*</strong>
+            </label>
+            <label class="check-line">
+              <input name="agree_not_guaranteed" type="checkbox" required />
+              I understand that submitting this form does not guarantee a reservation. <strong>*</strong>
+            </label>
+            <label class="check-line">
+              <input name="agree_payment_verification" type="checkbox" required />
+              I understand that my booking will only be confirmed after payment verification and approval by The Resthouse Zamboanga. <strong>*</strong>
+            </label>
+          </section>
+
+          <button class="submit-button" type="submit" id="submitButton">Submit Booking Request</button>
+          <p class="privacy-note">Your information is used only to process your booking request.</p>
+        </form>
+      </section>
+
+      <aside class="request-side">
+        <section>
+          <h2>Important Reminders</h2>
+          <ul>
+            <li>A reservation fee or security deposit is required before confirmation.</li>
+            <li>Our team will contact you using your mobile number or email.</li>
+            <li>Please make sure your contact information is correct.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>Contact</h2>
+          <p><strong>0954 195 4478</strong></p>
+          <p>theresthousezamboanga@gmail.com</p>
+          <p>Tala Road, Brgy. Lumbangan, Zamboanga City</p>
+        </section>
+      </aside>
+    </main>
+
+    <template id="successTemplate">
+      <section class="success-card">
+        <div class="success-mark">✓</div>
+        <p class="eyebrow">Request Received</p>
+        <h1>Thank you!</h1>
+        <p>Your booking request has been received. Our team will contact you for reservation fee or security deposit instructions.</p>
+        <div class="booking-code-box">
+          <span>Your Booking Code</span>
+          <strong data-success-code></strong>
+        </div>
+        <a class="submit-button" href="./booking-request.html">Submit Another Request</a>
+      </section>
+    </template>
+
+    <script src="./env.js"></script>
+    <script type="module" src="./src/booking-request.js"></script>
+  </body>
+</html>

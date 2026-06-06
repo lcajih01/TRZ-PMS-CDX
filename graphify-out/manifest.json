@@ -1,0 +1,422 @@
+{
+  ".claude/launch.json": {
+    "mtime": 1780626428.1723785,
+    "ast_hash": "c0d36a812832951a170fa41fdcffbded",
+    "semantic_hash": ""
+  },
+  "email/resend.mjs": {
+    "mtime": 1780692868.7106495,
+    "ast_hash": "241f5b74630a558c25ead3fcf39473bc",
+    "semantic_hash": ""
+  },
+  "package.json": {
+    "mtime": 1780561322.901356,
+    "ast_hash": "ddfe0930762bb1f3c748715fee88e64a",
+    "semantic_hash": ""
+  },
+  "server.mjs": {
+    "mtime": 1780674688.1590436,
+    "ast_hash": "725fa55a6d4f8b2c48f1f5c08f6250fc",
+    "semantic_hash": ""
+  },
+  "src/app.js": {
+    "mtime": 1780685936.643326,
+    "ast_hash": "62e0c94e93b1198e97f9f7271a68f5ed",
+    "semantic_hash": ""
+  },
+  "src/core.js": {
+    "mtime": 1780686820.1383054,
+    "ast_hash": "f7cdf01d05e767429815c1c5db5f20a5",
+    "semantic_hash": ""
+  },
+  "src/supabase.js": {
+    "mtime": 1780562405.5906198,
+    "ast_hash": "c3bd654f071c0e9a96fcef41f24de42b",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/001_phase1_foundation.sql": {
+    "mtime": 1780561297.466228,
+    "ast_hash": "b36b12be6e99a56d9e8eae202be83a79",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/002_access_code_rls.sql": {
+    "mtime": 1780562533.0250335,
+    "ast_hash": "218818ff950e80c41da9e4ed5b7b7b2c",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/003_fix_booking_rpc_calendar.sql": {
+    "mtime": 1780565269.4960878,
+    "ast_hash": "9fb016c946799b446586b37eb383d079",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/004_phase1_financial_workflow.sql": {
+    "mtime": 1780567355.231277,
+    "ast_hash": "02bec24f54727d166098c5b0f9d3eeda",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/005_phase1_checkin_workflow.sql": {
+    "mtime": 1780568091.6995163,
+    "ast_hash": "2628e9ff78cc9599ed6ac4d9425934f5",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/006_calendar_history_pricing_delete.sql": {
+    "mtime": 1780571783.7887418,
+    "ast_hash": "39bc39e22c70827cd23944d287f80a75",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/007_checkout_settlement_completes_booking.sql": {
+    "mtime": 1780572703.2926857,
+    "ast_hash": "9f5d3b1774e3c9e40fb31e5231bd4668",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/008_phase1_hardening.sql": {
+    "mtime": 1780578484.0681605,
+    "ast_hash": "35dfc2873c9198ad7333c181a3ee6928",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/009_phase2b_booking_management.sql": {
+    "mtime": 1780579761.5023544,
+    "ast_hash": "fe2b73dfe1b257066dc1e4e84099b2a4",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/010_phase2c_finance_controls.sql": {
+    "mtime": 1780580988.5613549,
+    "ast_hash": "5fbc8ac01a747642150180d132d67293",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/011_phase3a_drinks_inventory.sql": {
+    "mtime": 1780583541.6070683,
+    "ast_hash": "4487c5097eecc02e2f0fe2e3de6e428e",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/012_phase3b_electricity_tracking.sql": {
+    "mtime": 1780597264.9196098,
+    "ast_hash": "4425278d61bd1580a8ac2cce618a2f7a",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/013_phase3b_simplify_electricity_tracker.sql": {
+    "mtime": 1780597994.142785,
+    "ast_hash": "56d190faf12ca6c12f0872779ae3c6f2",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/014_phase3c_owner_harvest.sql": {
+    "mtime": 1780598819.2777395,
+    "ast_hash": "c0b303cd7863192aba701ccfe9116436",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/015_phase4a_automation_foundation.sql": {
+    "mtime": 1780601235.2634606,
+    "ast_hash": "fbcc427e17c67cd1d5978fbf59615761",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/016_phase4a_automation_timing_rules.sql": {
+    "mtime": 1780602178.7143505,
+    "ast_hash": "269fd0a62cdef8aeb0f2a2a5c15941ec",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/017_fix_checkin_rpc_overload.sql": {
+    "mtime": 1780602801.1923862,
+    "ast_hash": "e18c579f242ee3aec391a82e8e5088eb",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/018_fix_checkout_rpc_overload.sql": {
+    "mtime": 1780603140.7641675,
+    "ast_hash": "441d1dd96ef475822414335aac369b8c",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/019_manager_admin_month_cleanup.sql": {
+    "mtime": 1780673580.1976187,
+    "ast_hash": "be6eb7e16f4d8353cccd0467548e6eab",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/020_full_delete_test_booking.sql": {
+    "mtime": 1780686804.6868956,
+    "ast_hash": "6060d772d350e7622481018bd31923f1",
+    "semantic_hash": ""
+  },
+  "sw.js": {
+    "mtime": 1780623249.0799253,
+    "ast_hash": "6db60848f57742859952ee31c9a8f759",
+    "semantic_hash": ""
+  },
+  "tests/persistence-boundary.test.mjs": {
+    "mtime": 1780692835.715673,
+    "ast_hash": "012a708600db0563d325d49c591ff5f6",
+    "semantic_hash": ""
+  },
+  "tests/phase1.test.mjs": {
+    "mtime": 1780686837.433045,
+    "ast_hash": "022f3cb0891f285bd33febdc4d811b32",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1780598976.9718852,
+    "ast_hash": "e3705e44e317ccb312ac1e488282ae48",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1780625942.1958451,
+    "ast_hash": "2918149bf20d70fdfcf51ba8fdcca2b3",
+    "semantic_hash": ""
+  },
+  "documents/Penalties and Damages.pdf": {
+    "mtime": 1780622206.614138,
+    "ast_hash": "5e9125e53926f3420e24a864e3645664",
+    "semantic_hash": ""
+  },
+  "documents/TRZ HOUSE RULES.pdf": {
+    "mtime": 1780622206.6187122,
+    "ast_hash": "8679f34f27f247efc3aacee394b2cad3",
+    "semantic_hash": ""
+  },
+  "documents/TRZ LOCATION.pdf": {
+    "mtime": 1780622206.6378565,
+    "ast_hash": "48642176b5696f49c3cab9c893324b30",
+    "semantic_hash": ""
+  },
+  "email/assets/bedroom.jpg": {
+    "mtime": 1780692576.0138564,
+    "ast_hash": "4027314ebc3818c7524250519c25e2cd",
+    "semantic_hash": ""
+  },
+  "email/assets/game.jpg": {
+    "mtime": 1780692575.7558198,
+    "ast_hash": "1e54d43f31618cae81726e02dc054713",
+    "semantic_hash": ""
+  },
+  "email/assets/hero.jpg": {
+    "mtime": 1780692574.9945152,
+    "ast_hash": "18d3d6d86aa72872779516a7f796a76d",
+    "semantic_hash": ""
+  },
+  "email/assets/ktv.jpg": {
+    "mtime": 1780692575.5773885,
+    "ast_hash": "4d44c45f319388170aa55fa9533384ac",
+    "semantic_hash": ""
+  },
+  "email/assets/location-map.jpg": {
+    "mtime": 1780692576.6588752,
+    "ast_hash": "1f8f547efbad08836520ca144aae0e65",
+    "semantic_hash": ""
+  },
+  "email/assets/pool.jpg": {
+    "mtime": 1780692575.4004762,
+    "ast_hash": "906ab7dae9e825604f497e2707b17182",
+    "semantic_hash": ""
+  },
+  "guest/photos/aerial.jpg": {
+    "mtime": 1780666318.6871462,
+    "ast_hash": "aa0331f21ab8ced12e53389b7f42e60c",
+    "semantic_hash": ""
+  },
+  "guest/photos/billiards.jpg": {
+    "mtime": 1780666319.042521,
+    "ast_hash": "4e4ed261aa53677777bd1ad6517d265d",
+    "semantic_hash": ""
+  },
+  "guest/photos/exterior.jpg": {
+    "mtime": 1780666318.464933,
+    "ast_hash": "5036483077ba705d8992bfb5757be301",
+    "semantic_hash": ""
+  },
+  "guest/photos/grounds.jpg": {
+    "mtime": 1780666318.7487102,
+    "ast_hash": "56238b26986e16457892f398f7c7d7e0",
+    "semantic_hash": ""
+  },
+  "guest/photos/hero.jpg": {
+    "mtime": 1780666318.4479172,
+    "ast_hash": "098ed02b51f9a2b182194e23580e358f",
+    "semantic_hash": ""
+  },
+  "guest/photos/ktv.jpg": {
+    "mtime": 1780666318.9952977,
+    "ast_hash": "5a97ae0628966a50185fd00e763e7d2a",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_01.png": {
+    "mtime": 1780665842.5591445,
+    "ast_hash": "c18df1b487069d40aadae28b2f1eb432",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_02.png": {
+    "mtime": 1780665842.7160773,
+    "ast_hash": "622310affb5626a103ffa965701deab9",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_03.png": {
+    "mtime": 1780665842.8921502,
+    "ast_hash": "1c670c05fb239674b2526115ed4b09fb",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_04.jpg": {
+    "mtime": 1780665842.9262726,
+    "ast_hash": "939a25d6772443ec59d78942df116754",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_05.png": {
+    "mtime": 1780665842.9784956,
+    "ast_hash": "456955ebd6a77d54f5bb97b4c9d400c1",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_06.jpg": {
+    "mtime": 1780665843.0482433,
+    "ast_hash": "a7e3ff2e5672c2626b5789a25a0ecdd4",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_07.jpg": {
+    "mtime": 1780665843.0824218,
+    "ast_hash": "97d75a9eff3e0a59104e061fb9fb50ae",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_08.jpg": {
+    "mtime": 1780665843.1150136,
+    "ast_hash": "c92e203ebeee44c74fba2b6c73f039ba",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_09.png": {
+    "mtime": 1780665849.3709896,
+    "ast_hash": "9ed76a3f6d0d9ad91ec417b0de07a25e",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_10.png": {
+    "mtime": 1780665849.5377352,
+    "ast_hash": "8eb2bbb1e80f5549282913ebcb8da18b",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_11.png": {
+    "mtime": 1780665849.6944418,
+    "ast_hash": "622310affb5626a103ffa965701deab9",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_12.png": {
+    "mtime": 1780665849.8591254,
+    "ast_hash": "1c670c05fb239674b2526115ed4b09fb",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_13.png": {
+    "mtime": 1780665849.9805775,
+    "ast_hash": "c18df1b487069d40aadae28b2f1eb432",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_14.jpg": {
+    "mtime": 1780665850.0108433,
+    "ast_hash": "c92e203ebeee44c74fba2b6c73f039ba",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_15.jpg": {
+    "mtime": 1780665850.0373342,
+    "ast_hash": "71499e74324608bbd04dabac46bd37b7",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_16.jpg": {
+    "mtime": 1780665850.0704393,
+    "ast_hash": "939a25d6772443ec59d78942df116754",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_17.png": {
+    "mtime": 1780665850.1169875,
+    "ast_hash": "456955ebd6a77d54f5bb97b4c9d400c1",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_18.jpg": {
+    "mtime": 1780665850.1819332,
+    "ast_hash": "a7e3ff2e5672c2626b5789a25a0ecdd4",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_19.jpg": {
+    "mtime": 1780665850.2153814,
+    "ast_hash": "2207f82130fcf86641e51d6350bcb4eb",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_20.jpg": {
+    "mtime": 1780665850.2471213,
+    "ast_hash": "97d75a9eff3e0a59104e061fb9fb50ae",
+    "semantic_hash": ""
+  },
+  "guest/photos/photo_21.jpg": {
+    "mtime": 1780665850.2551315,
+    "ast_hash": "cdeada78b68904cd46ed64f1b33027a1",
+    "semantic_hash": ""
+  },
+  "guest/photos/pool-day.jpg": {
+    "mtime": 1780666318.5189836,
+    "ast_hash": "0c7eb4e1d8e3bcfd9e2e4a19578035ed",
+    "semantic_hash": ""
+  },
+  "guest/photos/pool-night.jpg": {
+    "mtime": 1780666318.6225843,
+    "ast_hash": "e831ead8e63d9be976d832eaf69499c3",
+    "semantic_hash": ""
+  },
+  "guest/photos/room-modern.jpg": {
+    "mtime": 1780666318.8905416,
+    "ast_hash": "2ec6f35e3732416eafdaf1e0343a6b94",
+    "semantic_hash": ""
+  },
+  "guest/photos/room-premium.jpg": {
+    "mtime": 1780666318.8432994,
+    "ast_hash": "86fd060c8631b9a6c46e4925fc16266e",
+    "semantic_hash": ""
+  },
+  "guest/photos/room-twin.jpg": {
+    "mtime": 1780666318.7927506,
+    "ast_hash": "63cbb8ab8476f2d47aee0412a06894be",
+    "semantic_hash": ""
+  },
+  "guest/photos/room-wood.jpg": {
+    "mtime": 1780666318.941246,
+    "ast_hash": "740cc569835c35d67fb8e13853c01213",
+    "semantic_hash": ""
+  },
+  "icons/icon-192.png": {
+    "mtime": 1780623164.445654,
+    "ast_hash": "e866a99bd1182323002830d2e5c0e760",
+    "semantic_hash": ""
+  },
+  "icons/icon-512.png": {
+    "mtime": 1780623164.4565334,
+    "ast_hash": "043783bcb2c2b602ca1d43d69fae7bef",
+    "semantic_hash": ""
+  },
+  "icons/icon-maskable-512.png": {
+    "mtime": 1780623164.4729605,
+    "ast_hash": "ff73354aae464f2cc98a1a06ceb04b91",
+    "semantic_hash": ""
+  },
+  "icons/icon-maskable.svg": {
+    "mtime": 1780622809.1466005,
+    "ast_hash": "e392bae6f7620aaf5731844e60f4d004",
+    "semantic_hash": ""
+  },
+  "icons/icon.svg": {
+    "mtime": 1780622809.0580196,
+    "ast_hash": "8059abe1c270c9090a9366ab86443686",
+    "semantic_hash": ""
+  },
+  "work/location-extract/loc-0-X4.png.jpg": {
+    "mtime": 1780692458.1804998,
+    "ast_hash": "81943ec955dc22491ee32335f7354dc9",
+    "semantic_hash": ""
+  },
+  "work/location-extract/loc-1-X8.png.jpg": {
+    "mtime": 1780692458.439495,
+    "ast_hash": "9e0211ddaf9d05331aa5376835a8b0b1",
+    "semantic_hash": ""
+  },
+  "work/location-extract/loc-2-X11.png.jpg": {
+    "mtime": 1780692458.4500122,
+    "ast_hash": "1af5140dc2c4f167cdeec6962c4a3e6d",
+    "semantic_hash": ""
+  },
+  "work/location-extract/loc-3-X12.png.jpg": {
+    "mtime": 1780692458.501984,
+    "ast_hash": "19ee5d45276621f633e96fef35619b3a",
+    "semantic_hash": ""
+  },
+  "work/location-extract/loc-4-X14.jpg.jpg": {
+    "mtime": 1780692458.5092096,
+    "ast_hash": "5d0659b8fe0432e210e39528f1165e45",
+    "semantic_hash": ""
+  }
+}
