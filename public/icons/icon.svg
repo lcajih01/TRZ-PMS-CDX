@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="TRZ PMS icon">
+  <rect width="512" height="512" rx="72" fill="#00140b"/>
+  <rect x="48" y="48" width="416" height="416" rx="48" fill="#073f22" stroke="#d4b34d" stroke-width="10"/>
+  <path d="M112 228 256 116l144 112v148a20 20 0 0 1-20 20H132a20 20 0 0 1-20-20Z" fill="#0d5c2d" stroke="#f1d36b" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M192 396V284h112v112" fill="#00140b" stroke="#f1d36b" stroke-width="10"/>
+  <text x="256" y="266" text-anchor="middle" font-family="Arial, sans-serif" font-size="62" font-weight="700" fill="#ffffff">TRZ</text>
+</svg>

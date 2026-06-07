@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 
 const app = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+const buildScript = await readFile(new URL("../build.mjs", import.meta.url), "utf8");
 const bookingRequestHtml = await readFile(new URL("../booking-request.html", import.meta.url), "utf8");
 const bookingRequestCss = await readFile(new URL("../booking-request.css", import.meta.url), "utf8");
 const bookingRequestJs = await readFile(new URL("../src/booking-request.js", import.meta.url), "utf8");
@@ -13,6 +14,9 @@ const automationApi = await readFile(new URL("../api/automation/send.js", import
 const memoryApi = await readFile(new URL("../api/memory/send.js", import.meta.url), "utf8");
 const resendHelper = await readFile(new URL("../email/resend.mjs", import.meta.url), "utf8");
 const vercelConfig = await readFile(new URL("../vercel.json", import.meta.url), "utf8");
+const vercelData = JSON.parse(vercelConfig);
+const vercelRewrite = vercelData.rewrites?.[0] || {};
+const vercelRewriteSource = vercelRewrite.source || "";
 const manifest = await readFile(new URL("../manifest.webmanifest", import.meta.url), "utf8");
 const serviceWorker = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 const manifestData = JSON.parse(manifest);
@@ -119,7 +123,17 @@ assert.ok(server.includes("sendJson(res, 500"), "local email API errors must ret
 assert.ok(automationApi.includes("sendJson(res, 200") && automationApi.includes("sendJson(res, 500"), "Vercel automation API must always return JSON");
 assert.ok(memoryApi.includes("sendJson(res, 200") && memoryApi.includes("sendJson(res, 500"), "Vercel memory API must always return JSON");
 assert.ok(automationApi.includes("process.env") && memoryApi.includes("process.env"), "Vercel email APIs must use server-side environment variables");
-assert.ok(vercelConfig.includes("((?!api/).*"), "Vercel SPA rewrite must not swallow /api routes");
+assert.ok(vercelRewriteSource.includes("((?!api/|"), "Vercel SPA rewrite must not swallow /api routes");
+assert.ok(buildScript.includes('cp("booking-request.html", "public/booking-request.html")'), "build must publish booking-request.html");
+assert.ok(buildScript.includes('cp("booking-request.css", "public/booking-request.css")'), "build must publish booking-request.css");
+assert.ok(buildScript.includes('cp("src", "public/src"'), "build must publish src/booking-request.js through the src folder");
+assert.ok(buildScript.includes('cp("email/assets", "public/email/assets"'), "build must publish booking request logo assets");
+assert.ok(buildScript.includes('cp("icons", "public/icons"'), "build must publish booking request icon assets");
+assert.ok(vercelRewriteSource.includes("booking-request\\.html$"), "Vercel rewrite must not swallow booking-request.html");
+assert.ok(vercelRewriteSource.includes("booking-request\\.css$"), "Vercel rewrite must not swallow booking-request.css");
+assert.ok(vercelRewriteSource.includes("src/booking-request\\.js$"), "Vercel rewrite must not swallow src/booking-request.js");
+assert.ok(vercelRewriteSource.includes("env\\.js$"), "Vercel rewrite must not swallow env.js needed by the public form");
+assert.equal(vercelRewrite.destination, "/index.html", "Vercel must keep the PMS fallback route");
 assert.ok(!server.includes("RESEND_API_KEY:"), "server must not expose RESEND_API_KEY through env.js");
 assert.ok(resendHelper.includes("RESEND_API_KEY"), "Resend helper must use RESEND_API_KEY");
 assert.ok(resendHelper.includes("The Resthouse Zamboanga <bookings@theresthousezamboanga.com>"), "Resend sender must use TRZ display name and verified domain");
