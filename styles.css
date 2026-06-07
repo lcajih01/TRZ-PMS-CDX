@@ -43,6 +43,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html { overflow-x: hidden; }
+
 /* ─── Animations ─────────────────────────────────────────────────── */
 
 @keyframes fade-in {
@@ -1271,6 +1273,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   transition: background 0.12s;
 }
 #trz-fab-menu button:hover { background: rgba(255,255,255,0.09); }
+#trz-fab-backdrop { cursor: default; display: none; inset: 0; position: fixed; z-index: 149; }
 
 /* Feature 7: Quick Booking Popup */
 .quick-popup { max-width: 420px; }
@@ -1492,6 +1495,16 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
+/* ─── Calendar Detail Panel (mobile only) ────────────────────────── */
+.cal-detail-panel  { display: none; }
+.cal-detail-header { align-items: center; display: flex; gap: 8px; margin-bottom: 8px; }
+.cal-detail-code   { color: var(--muted); font-size: 11px; }
+.cal-detail-guest  { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.cal-detail-meta   { color: var(--muted); display: flex; flex-direction: column; font-size: 12px; gap: 3px; margin-bottom: 10px; }
+.cal-detail-date   { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.cal-detail-empty  { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.cal-detail-actions { margin-top: 8px; }
+
 /* ─── Mobile ─────────────────────────────────────────────────────── */
 
 @media (max-width: 760px) {
@@ -1561,7 +1574,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   }
 
   /* ── Tabs → compact horizontal scroll row ─────────────────────── */
-  main { margin-left: 0; }
+  main { margin-left: 0; width: 100%; }
 
   .tabs {
     background: rgba(9,26,17,0.95);
@@ -1675,7 +1688,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   .calendar-header { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
   .calendar-legend { display: none; } /* legend replaced by hover titles + Upcoming list */
   .calendar-nav    { gap: 3px; width: 100%; }
-  .calendar-nav button { flex: 1; font-size: 11px; min-height: 36px; padding: 5px 4px; }
+  .calendar-nav button { flex: 1; font-size: 11px; min-height: 44px; padding: 5px 4px; }
 
   .calendar-grid    { gap: 2px; }
   .calendar-weekdays { font-size: 9px; letter-spacing: 0; margin-bottom: 2px; }
@@ -1683,7 +1696,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   /* Compact cells: show date number + colored strip only — no text label */
   .calendar-day {
     border-radius: 4px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 3px 4px;
     transition: none;
   }
@@ -1740,6 +1753,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   .bm-fin-row { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .bm-fin-item { padding: 8px; }
   .bm-fin-item strong { font-size: 12px; }
+  .bm-nav-btn { min-height: 44px; min-width: 44px; }
 
   /* ── Settlement summary → 2-column ───────────────────────────── */
   .settlement-summary { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -1748,6 +1762,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   /* ── Wallet / Finance ─────────────────────────────────────────── */
   .wallet-summary-grid  { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
   .wallet-summary-card strong { font-size: 16px; }
+  .elec-estimate-card .elec-peso-estimate { font-size: 22px; }
   .finance-summary-grid { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
   .finance-filter-form  { grid-template-columns: 1fr; }
   .fin-kpi-row   { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -1764,4 +1779,14 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   /* ── Hero stat row (used in old hero section, kept for safety) ── */
   .hero-stat-row { gap: 8px; grid-template-columns: repeat(3, minmax(0,1fr)); }
   .hero-stat-row strong { font-size: 16px; }
+
+  /* ── Calendar detail panel ────────────────────────────────────── */
+  .cal-detail-panel:not([hidden]) {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    display: block;
+    margin-top: 8px;
+    padding: 14px;
+  }
 }

@@ -57,6 +57,7 @@ let financeFilters = {
   search: ""
 };
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calendarSelectedDate = null;
 let autoRefreshTimer = null;
 let stateFingerprint = "";
 let postStaySendConfirmId = null;
@@ -565,7 +566,8 @@ function calendarView() {
     </div>
     <div class="calendar-grid">
       ${cells.map((day) => (day ? calendarDay(day) : `<div class="calendar-day blank"></div>`)).join("")}
-    </div>`;
+    </div>
+    <div id="cal-detail-panel" class="cal-detail-panel" hidden></div>`;
 }
 
 // Maps booking status to a CSS modifier class for full-cell background tinting.
@@ -588,7 +590,7 @@ function calendarDay(day) {
 
   if (!primarySeg) {
     return `
-    <button type="button" class="calendar-day${todayClass}" data-open-date="${dateStr}" aria-label="${num} Available">
+    <button type="button" class="calendar-day${todayClass}" data-cal-cell data-open-date="${dateStr}" aria-label="${num} Available">
       <strong>${num}</strong>
       <span>Available</span>
     </button>`;
@@ -602,7 +604,7 @@ function calendarDay(day) {
   const fullLabel = `${guestName} · ${booking.booking_code} · ${booking.status}`;
 
   return `
-    <button type="button" class="calendar-day${statusClass ? ` ${statusClass}` : ""}${todayClass}" data-open-booking="${booking.id}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${num} ${fullLabel}`)}">
+    <button type="button" class="calendar-day${statusClass ? ` ${statusClass}` : ""}${todayClass}" data-cal-cell data-open-booking="${booking.id}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${num} ${fullLabel}`)}">
       <strong>${num}</strong>
       <span>${escapeHtml(guestName)}</span>
       <span>${escapeHtml(ref)} · ${escapeHtml(statusLabel)}</span>
@@ -1211,10 +1213,10 @@ function electricityView() {
           <strong>${meterValue(latestReading?.current_meter)}</strong>
           <em>${latestReading?.reading_date || "No current reading yet"}</em>
         </article>
-        <article class="wallet-summary-card">
+        <article class="wallet-summary-card elec-estimate-card">
           <span>Usage / Estimate</span>
-          <strong>${meterValue(summary.kwh_used)} kWh</strong>
-          <em>${money(summary.estimated_amount)}</em>
+          <strong class="elec-peso-estimate">${money(summary.estimated_amount)}</strong>
+          <em>${meterValue(summary.kwh_used)} kWh used</em>
         </article>
       </div>
       <div class="grid two" style="margin-top:12px">
@@ -2362,6 +2364,10 @@ function bindBookingSearch() {
 function bindCalendarActions() {
   document.querySelectorAll("[data-open-date]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.calCell !== undefined && window.innerWidth <= 760) {
+        showCalendarDetail(null, button.dataset.openDate);
+        return;
+      }
       quickBookingContext = { date: button.dataset.openDate };
       createBookingContext = null;
       bookingActionContext = null;
@@ -2372,11 +2378,65 @@ function bindCalendarActions() {
     button.addEventListener("click", () => {
       const booking = state.bookings.find((item) => item.id === button.dataset.openBooking);
       if (!booking) return;
+      if (button.dataset.calCell !== undefined && window.innerWidth <= 760) {
+        showCalendarDetail(booking, null);
+        return;
+      }
       bookingActionContext = { booking };
       createBookingContext = null;
       guestProfileContext = null;
       render();
     });
+  });
+}
+
+function showCalendarDetail(booking, dateStr) {
+  calendarSelectedDate = booking ? booking.id : dateStr;
+  const panel = document.getElementById("cal-detail-panel");
+  if (!panel) return;
+  if (!booking) {
+    const d = new Date(dateStr + "T00:00:00");
+    const formatted = d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+    panel.hidden = false;
+    panel.innerHTML = `
+      <div class="cal-detail-date">${formatted}</div>
+      <p class="cal-detail-empty">No booking on this date.</p>
+      <div class="cal-detail-actions">
+        <button type="button" class="primary cal-detail-new-btn">+ New Booking</button>
+      </div>`;
+    panel.querySelector(".cal-detail-new-btn").addEventListener("click", () => {
+      quickBookingContext = { date: dateStr };
+      createBookingContext = null;
+      bookingActionContext = null;
+      render();
+    });
+    return;
+  }
+  const gName = guestNameText(booking.guest_id);
+  const guest = state.guests.find((g) => g.id === booking.guest_id);
+  const pkg = state.package_versions.find((v) => v.id === booking.package_version_id);
+  const pkgName = pkg ? (state.packages.find((p) => p.id === pkg.package_id)?.name ?? "") : "";
+  const sc = bookingStatusClass(booking.status);
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="cal-detail-header">
+      <span class="pill${sc ? ` pill-${sc}` : ""}">${booking.status}</span>
+      <span class="cal-detail-code">${escapeHtml(shortBookingCode(booking.booking_code))}</span>
+    </div>
+    <div class="cal-detail-guest">${escapeHtml(gName)}</div>
+    <div class="cal-detail-meta">
+      <span>${escapeHtml(booking.start_at ? booking.start_at.slice(0, 10) : "")}${booking.end_at ? " → " + booking.end_at.slice(0, 10) : ""}</span>
+      ${pkgName ? `<span>${escapeHtml(pkgName)}</span>` : ""}
+      ${guest?.phone ? `<span>${escapeHtml(guest.phone)}</span>` : ""}
+    </div>
+    <div class="cal-detail-actions">
+      <button type="button" class="primary cal-detail-view-btn">View Full Booking</button>
+    </div>`;
+  panel.querySelector(".cal-detail-view-btn").addEventListener("click", () => {
+    bookingActionContext = { booking };
+    createBookingContext = null;
+    guestProfileContext = null;
+    render();
   });
 }
 
@@ -4149,6 +4209,7 @@ function bindBookingNavButtons() {
 // ── Feature 6: Floating Quick Actions ─────────────────────────────
 
 function renderFloatingActions() {
+  document.getElementById("trz-fab-backdrop")?.remove();
   document.getElementById("trz-fab")?.remove();
   if (!isAccessUnlocked()) return;
 
@@ -4164,16 +4225,36 @@ function renderFloatingActions() {
     </div>`;
   document.body.appendChild(fab);
 
+  const backdrop = document.createElement("div");
+  backdrop.id = "trz-fab-backdrop";
+  document.body.appendChild(backdrop);
+
+  function openMenu() {
+    if (!fab.isConnected) return;
+    fab.querySelector("#trz-fab-menu").hidden = false;
+    fab.querySelector("#trz-fab-toggle").textContent = "✕";
+    backdrop.style.display = "block";
+    window.addEventListener("scroll", closeMenu, { passive: true, once: true });
+  }
+
+  function closeMenu() {
+    if (!fab.isConnected) return;
+    fab.querySelector("#trz-fab-menu").hidden = true;
+    fab.querySelector("#trz-fab-toggle").textContent = "+";
+    backdrop.style.display = "none";
+    window.removeEventListener("scroll", closeMenu);
+  }
+
+  backdrop.addEventListener("click", closeMenu);
+
   fab.querySelector("#trz-fab-toggle").addEventListener("click", () => {
     const menu = fab.querySelector("#trz-fab-menu");
-    menu.hidden = !menu.hidden;
-    fab.querySelector("#trz-fab-toggle").textContent = menu.hidden ? "+" : "✕";
+    if (menu.hidden) { openMenu(); } else { closeMenu(); }
   });
 
   fab.querySelectorAll("[data-fab-action]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      fab.querySelector("#trz-fab-menu").hidden = true;
-      fab.querySelector("#trz-fab-toggle").textContent = "+";
+      closeMenu();
       const action = btn.dataset.fabAction;
       if (action === "new-booking") {
         createBookingContext = { checkin_date: "" };
