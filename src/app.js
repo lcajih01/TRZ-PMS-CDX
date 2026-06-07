@@ -1427,6 +1427,7 @@ function auditView() {
 }
 
 function settingsView() {
+  const buildMarker = window.__TRZ_ENV__?.BUILD_MARKER ?? "dev";
   return `
     <div class="page-stack">
       <div class="page-header">
@@ -1440,6 +1441,7 @@ function settingsView() {
       ${automationView()}
       ${securitySettingsSection()}
       ${isManagerViewUnlocked() ? adminToolsView() : ""}
+      <p class="build-marker">Build: ${escapeHtml(buildMarker)}</p>
     </div>`;
 }
 
@@ -2161,7 +2163,6 @@ function bindForms() {
   bindQuickBookingPopup();
   bindPostStayEmail();
   bindGuestMemory();
-  renderFloatingActions();
   document.querySelectorAll("form[data-action]").forEach((form) => {
     if (form.dataset.action === "unlock") return;
     if (form.dataset.action === "quick-booking-prefill") return;
@@ -4202,93 +4203,6 @@ function bindBookingNavButtons() {
       if (!booking) return;
       bookingActionContext = { booking };
       render();
-    });
-  });
-}
-
-// ── Feature 6: Floating Quick Actions ─────────────────────────────
-
-function renderFloatingActions() {
-  document.getElementById("trz-fab-backdrop")?.remove();
-  document.getElementById("trz-fab")?.remove();
-  if (!isAccessUnlocked()) return;
-
-  const fab = document.createElement("div");
-  fab.id = "trz-fab";
-  fab.innerHTML = `
-    <button type="button" id="trz-fab-toggle" title="Quick actions" aria-label="Quick actions">+</button>
-    <div id="trz-fab-menu" hidden>
-      <button type="button" data-fab-action="new-booking">New Booking</button>
-      <button type="button" data-fab-action="go-bookings">Go to Bookings</button>
-      <button type="button" data-fab-action="checkin-today">Check In Today</button>
-      <button type="button" data-fab-action="checkout-today">Check Out Today</button>
-    </div>`;
-  document.body.appendChild(fab);
-
-  const backdrop = document.createElement("div");
-  backdrop.id = "trz-fab-backdrop";
-  document.body.appendChild(backdrop);
-
-  function openMenu() {
-    if (!fab.isConnected) return;
-    fab.querySelector("#trz-fab-menu").hidden = false;
-    fab.querySelector("#trz-fab-toggle").textContent = "✕";
-    backdrop.style.display = "block";
-    window.addEventListener("scroll", closeMenu, { passive: true, once: true });
-  }
-
-  function closeMenu() {
-    if (!fab.isConnected) return;
-    fab.querySelector("#trz-fab-menu").hidden = true;
-    fab.querySelector("#trz-fab-toggle").textContent = "+";
-    backdrop.style.display = "none";
-    window.removeEventListener("scroll", closeMenu);
-  }
-
-  backdrop.addEventListener("click", closeMenu);
-
-  fab.querySelector("#trz-fab-toggle").addEventListener("click", () => {
-    const menu = fab.querySelector("#trz-fab-menu");
-    if (menu.hidden) { openMenu(); } else { closeMenu(); }
-  });
-
-  fab.querySelectorAll("[data-fab-action]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      closeMenu();
-      const action = btn.dataset.fabAction;
-      if (action === "new-booking") {
-        createBookingContext = { checkin_date: "" };
-        quickBookingContext = null;
-        bookingActionContext = null;
-        render();
-      } else if (action === "go-bookings") {
-        activeTab = "bookings";
-        render();
-      } else if (action === "checkin-today") {
-        const today = new Date();
-        const booking = state.bookings.find(
-          (b) => sameLocalDate(new Date(b.start_at), today) &&
-                 !["Checked In", "Completed", "Cancelled", "Archived", "Refunded"].includes(b.status)
-        );
-        if (booking) {
-          bookingActionContext = { booking };
-          createBookingContext = null;
-          quickBookingContext = null;
-          render();
-        } else {
-          showMessage("No check-in due today.", "");
-        }
-      } else if (action === "checkout-today") {
-        const booking = state.bookings.find((b) => b.status === "Checked In");
-        if (booking) {
-          bookingActionContext = { booking };
-          createBookingContext = null;
-          quickBookingContext = null;
-          render();
-        } else {
-          showMessage("No guest is currently checked in.", "");
-        }
-      }
     });
   });
 }

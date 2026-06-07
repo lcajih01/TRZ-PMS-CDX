@@ -20,6 +20,28 @@ export const BLOCKING_STATUSES = new Set([
   "Checked In"
 ]);
 
+// Valid statuses for new booking creation — post-creation statuses are
+// driven by action buttons, not the form dropdown.
+export const CREATION_STATUSES = [
+  "Inquiry",
+  "Tentative",
+  "Deposit Requested",
+  "Deposit Received",
+  "Confirmed"
+];
+
+// Allowed rollback targets per current status (manager-protected).
+// "Cancelled" is excluded — it uses the separate Restore Cancelled flow.
+export const REVERT_TARGETS = {
+  "Tentative":         ["Inquiry"],
+  "Deposit Requested": ["Tentative", "Inquiry"],
+  "Deposit Received":  ["Deposit Requested", "Tentative", "Inquiry"],
+  "Confirmed":         ["Deposit Received", "Deposit Requested", "Tentative", "Inquiry"],
+  "Checked In":        ["Confirmed"],
+  "Checked Out":       ["Checked In"],
+  "Completed":         ["Checked Out"]
+};
+
 export const ACCOUNT_TYPES = [
   "Revenue",
   "Security Deposit Liability",
@@ -986,6 +1008,21 @@ export function findBookingConflict(state, booking) {
 
 export function rangesOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
+}
+
+export function overnightOccupiedDateKeys(startAt, endAt) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return [];
+
+  const keys = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const checkoutDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor < checkoutDay) {
+    keys.push(dateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
 }
 
 function nextBookingCode(state, startAt) {

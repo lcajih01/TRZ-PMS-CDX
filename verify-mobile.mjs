@@ -36,14 +36,9 @@ const checks = [
       return dayIdx !== -1 && block.slice(dayIdx, dayIdx + 80).includes("min-height: 44px");
     })()],
 
-  // ── 3. FAB scroll-close + backdrop ───────────────────────────────
-  ["#trz-fab-backdrop CSS defined globally", css.includes("#trz-fab-backdrop")],
-  ["renderFloatingActions removes old backdrop", fnBlock(app, "function renderFloatingActions(", 500).includes('trz-fab-backdrop')],
-  ["FAB openMenu function exists", fnBlock(app, "function renderFloatingActions(").includes("function openMenu()")],
-  ["FAB closeMenu function exists", fnBlock(app, "function renderFloatingActions(").includes("function closeMenu()")],
-  ["scroll listener with once:true added in openMenu", fnBlock(app, "function renderFloatingActions(").includes("once: true")],
-  ["backdrop click closes menu", fnBlock(app, "function renderFloatingActions(").includes("backdrop.addEventListener(\"click\", closeMenu)")],
-  ["fab.isConnected safety check in openMenu/closeMenu", fnBlock(app, "function renderFloatingActions(").includes("fab.isConnected")],
+  // ── 3. FAB removed ───────────────────────────────────────────────
+  ["FAB renderFloatingActions removed from app.js", !app.includes("function renderFloatingActions(")],
+  ["#trz-fab-menu removed from CSS", !css.includes("#trz-fab-menu")],
 
   // ── 4. Electricity peso estimate ──────────────────────────────────
   ["elec-estimate-card class on Usage card", fnBlock(app, "function electricityView(").includes("elec-estimate-card")],

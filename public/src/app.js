@@ -1,6 +1,8 @@
 import {
   ACCOUNT_TYPES,
   BOOKING_STATUSES,
+  CREATION_STATUSES,
+  REVERT_TARGETS,
   DEFAULT_SECURITY_DEPOSIT,
   bookingNightCount,
   calculateBasePrice,
@@ -8,7 +10,8 @@ import {
   drinkProductMetrics,
   filterLedgerLines,
   financeSummary,
-  money
+  money,
+  overnightOccupiedDateKeys
 } from "./core.js";
 import {
   hasSupabaseConfig,
@@ -39,6 +42,9 @@ let quickBookingContext = null;
 let guestProfileContext = null;
 let editBookingContext = null;
 let cancelBookingContext = null;
+let revertStatusContext = null;
+let restoreCancelledContext = null;
+let editGuestEmailContext = null;
 let transactionContext = null;
 let confirmBookingDeposit = null;
 let adminCleanupPreview = null;
@@ -51,6 +57,7 @@ let financeFilters = {
   search: ""
 };
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calendarSelectedDate = null;
 let autoRefreshTimer = null;
 let stateFingerprint = "";
 let postStaySendConfirmId = null;
@@ -285,6 +292,9 @@ function render() {
   if (guestProfileContext) view.innerHTML += guestProfileModal(guestProfileContext);
   if (editBookingContext) view.innerHTML += editBookingModal(editBookingContext);
   if (cancelBookingContext) view.innerHTML += cancelBookingModal(cancelBookingContext);
+  if (revertStatusContext) view.innerHTML += revertStatusModal(revertStatusContext);
+  if (restoreCancelledContext) view.innerHTML += restoreCancelledModal(restoreCancelledContext);
+  if (editGuestEmailContext) view.innerHTML += editGuestEmailModal(editGuestEmailContext);
   if (transactionContext) view.innerHTML += transactionModal(transactionContext);
   if (confirmBookingDeposit) view.innerHTML += confirmBookingDepositModal(confirmBookingDeposit);
   if (checkinPayment) view.innerHTML += checkinPaymentModal(checkinPayment);
@@ -312,6 +322,9 @@ function renderShell() {
     guestProfileContext = null;
     editBookingContext = null;
     cancelBookingContext = null;
+    revertStatusContext = null;
+    restoreCancelledContext = null;
+    editGuestEmailContext = null;
     transactionContext = null;
     confirmBookingDeposit = null;
     adminCleanupPreview = null;
@@ -553,7 +566,8 @@ function calendarView() {
     </div>
     <div class="calendar-grid">
       ${cells.map((day) => (day ? calendarDay(day) : `<div class="calendar-day blank"></div>`)).join("")}
-    </div>`;
+    </div>
+    <div id="cal-detail-panel" class="cal-detail-panel" hidden></div>`;
 }
 
 // Maps booking status to a CSS modifier class for full-cell background tinting.
@@ -567,10 +581,7 @@ function calDayStatusClass(status) {
 }
 
 function calendarDay(day) {
-  // Only show a booking on its start date — end/checkout dates render as Available.
-  const segments = calendarSegmentsForDay(day).filter(
-    (s) => sameLocalDate(new Date(s.booking.start_at), day)
-  );
+  const segments = calendarSegmentsForDay(day);
   const isToday = sameLocalDate(day, new Date());
   const todayClass = isToday ? " today" : "";
   const dateStr = dateInputValue(day);
@@ -579,7 +590,7 @@ function calendarDay(day) {
 
   if (!primarySeg) {
     return `
-    <button type="button" class="calendar-day${todayClass}" data-open-date="${dateStr}" aria-label="${num} Available">
+    <button type="button" class="calendar-day${todayClass}" data-cal-cell data-open-date="${dateStr}" aria-label="${num} Available">
       <strong>${num}</strong>
       <span>Available</span>
     </button>`;
@@ -589,11 +600,11 @@ function calendarDay(day) {
   const statusClass = calDayStatusClass(booking.status);
   const guestName = guestNameText(booking.guest_id);
   const ref = shortBookingCode(booking.booking_code);
-  const statusLabel = shortCalendarStatus(booking.status);
+  const statusLabel = shortCalendarStatus(primarySeg.label);
   const fullLabel = `${guestName} · ${booking.booking_code} · ${booking.status}`;
 
   return `
-    <button type="button" class="calendar-day${statusClass ? ` ${statusClass}` : ""}${todayClass}" data-open-booking="${booking.id}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${num} ${fullLabel}`)}">
+    <button type="button" class="calendar-day${statusClass ? ` ${statusClass}` : ""}${todayClass}" data-cal-cell data-open-booking="${booking.id}" title="${escapeHtml(fullLabel)}" aria-label="${escapeHtml(`${num} ${fullLabel}`)}">
       <strong>${num}</strong>
       <span>${escapeHtml(guestName)}</span>
       <span>${escapeHtml(ref)} · ${escapeHtml(statusLabel)}</span>
@@ -621,6 +632,7 @@ function shortCalendarStatus(label) {
 }
 
 function calendarSegmentsForDay(day) {
+  const dayKey = dateInputValue(day);
   const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
   const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 0, 0, 0);
   const segments = state.bookings.filter((booking) => {
@@ -631,6 +643,8 @@ function calendarSegmentsForDay(day) {
     const end = new Date(booking.end_at);
     const startsToday = sameLocalDate(start, day);
     const endsToday = sameLocalDate(end, day);
+    const isOvernightOccupiedDay = overnightOccupiedDateKeys(booking.start_at, booking.end_at).includes(dayKey);
+    if (!startsToday && endsToday && !isOvernightOccupiedDay) return null;
     let kind = "reserved";
     let label = booking.status;
     const futureHoldStatus = ["Inquiry", "Tentative", "Deposit Requested", "Deposit Received", "Confirmed"].includes(booking.status);
@@ -644,10 +658,7 @@ function calendarSegmentsForDay(day) {
     } else if (startsToday) {
       kind = occupiedStatus ? "checkin" : `${calendarHoldKind(booking.status)}-checkin`;
       label = occupiedStatus ? "Check-In" : `${booking.status} Check-In`;
-    } else if (endsToday) {
-      kind = "checkout";
-      label = `${booking.status} Check-Out`;
-    } else if (occupiedStatus) {
+    } else if (occupiedStatus || isOvernightOccupiedDay) {
       kind = "occupied";
       label = "Occupied";
     } else if (futureHoldStatus) {
@@ -655,7 +666,7 @@ function calendarSegmentsForDay(day) {
       label = booking.status;
     }
     return { booking, kind, label };
-  });
+  }).filter(Boolean);
   const activeSegments = segments.filter((segment) => segment.booking.status !== "Completed");
   return activeSegments.length ? activeSegments : segments;
 }
@@ -819,7 +830,10 @@ function bookingForm(options = {}) {
   const p = options.prefill || {};
   return `
     <form data-action="booking" data-booking-date-form>
-      <label class="field"><span>Select existing guest</span><select name="guest_id"><option value="">Create new guest below</option>${state.guests.map((guest) => `<option value="${guest.id}">${escapeHtml(guest.full_name)} - ${escapeHtml(guest.phone)}</option>`).join("")}</select></label>
+      <p class="form-required-hint">Fields marked <span class="required-star">*</span> are required.</p>
+
+      <h4 class="form-section-title">Guest</h4>
+      <label class="field"><span>Select existing guest</span><select name="guest_id"><option value="">— Create new guest below —</option>${state.guests.map((guest) => `<option value="${guest.id}">${escapeHtml(guest.full_name)} - ${escapeHtml(guest.phone)}</option>`).join("")}</select></label>
       <div class="subsection">
         <h3>Or Create New Guest</h3>
         <div class="grid two">
@@ -829,35 +843,40 @@ function bookingForm(options = {}) {
           <label class="field"><span>Email</span><input name="new_guest_email" type="email" /></label>
         </div>
       </div>
-      <label class="field"><span>Package</span><select name="package_version_id" data-booking-package required>${state.packages.map((pkg) => {
+
+      <h4 class="form-section-title">Stay Details</h4>
+      <label class="field"><span class="field-required">Package</span><select name="package_version_id" data-booking-package required>${state.packages.map((pkg) => {
         const version = latestPackageVersion(pkg.id);
         if (!version) return "";
         const selected = p.package_version_id === version.id ? " selected" : "";
         return `<option value="${version.id}"${selected}>${escapeHtml(pkg.name)} v${version.version_number} - ${money(version.price)}</option>`;
       }).join("")}</select></label>
       <div class="grid two">
-        <label class="field"><span>Check-in date</span><input name="checkin_date" type="date" value="${checkinValue}" required /></label>
+        <label class="field"><span class="field-required">Check-in date</span><input name="checkin_date" type="date" value="${checkinValue}" required /></label>
         <label class="field" data-checkout-field><span>Check-out date</span><input name="checkout_date" type="date" /></label>
-        <label class="field"><span>Pax</span><input name="pax_count" type="number" min="1" required /></label>
-        <label class="field"><span>Security deposit</span><input name="security_deposit_amount" type="number" min="0" value="${DEFAULT_SECURITY_DEPOSIT}" required /></label>
+        <label class="field"><span class="field-required">Pax</span><input name="pax_count" type="number" min="1" required /></label>
+        <label class="field"><span class="field-required">Security deposit</span><input name="security_deposit_amount" type="number" min="0" value="${DEFAULT_SECURITY_DEPOSIT}" required /></label>
       </div>
       <p class="muted" data-booking-time-summary></p>
       <p class="message" data-booking-price-summary>Choose package and dates to calculate price.</p>
-      <label class="field"><span>Status</span><select name="status">${BOOKING_STATUSES.map((status) => `<option>${status}</option>`).join("")}</select></label>
+
+      <h4 class="form-section-title">Status &amp; Notes</h4>
+      <label class="field"><span class="field-required">Initial Status</span><select name="status" required>${CREATION_STATUSES.map((status) => `<option>${status}</option>`).join("")}</select></label>
+      <p class="form-field-hint">Status advances via action buttons after booking is created (Check In, Check Out, etc.).</p>
       <label class="field"><span>Notes</span><textarea name="notes"></textarea></label>
-      <div class="subsection">
-        <h3>Optional Payments</h3>
-        <label class="check-field"><input name="deposit_received" type="checkbox" /> Security deposit received?</label>
-        <div class="grid two">
-          <label class="field"><span>Deposit amount</span><input name="deposit_amount" type="number" min="0" value="${DEFAULT_SECURITY_DEPOSIT}" /></label>
-          <label class="field"><span>Deposit wallet</span><select name="deposit_wallet_id">${walletOptions()}</select></label>
-        </div>
-        <label class="check-field"><input name="package_payment_received" type="checkbox" /> Package payment received?</label>
-        <div class="grid two">
-          <label class="field"><span>Package payment amount</span><input name="package_payment_amount" type="number" min="0" /></label>
-          <label class="field"><span>Package payment wallet</span><select name="package_payment_wallet_id">${walletOptions()}</select></label>
-        </div>
+
+      <h4 class="form-section-title">Optional Payments at Creation</h4>
+      <label class="check-field"><input name="deposit_received" type="checkbox" /> Security deposit received?</label>
+      <div class="grid two">
+        <label class="field"><span>Deposit amount</span><input name="deposit_amount" type="number" min="0" value="${DEFAULT_SECURITY_DEPOSIT}" /></label>
+        <label class="field"><span>Deposit wallet</span><select name="deposit_wallet_id">${walletOptions()}</select></label>
       </div>
+      <label class="check-field"><input name="package_payment_received" type="checkbox" /> Package payment received?</label>
+      <div class="grid two">
+        <label class="field"><span>Package payment amount</span><input name="package_payment_amount" type="number" min="0" /></label>
+        <label class="field"><span>Package payment wallet</span><select name="package_payment_wallet_id">${walletOptions()}</select></label>
+      </div>
+
       <div class="actions"><button class="primary">Create Booking</button></div>
     </form>`;
 }
@@ -1194,10 +1213,10 @@ function electricityView() {
           <strong>${meterValue(latestReading?.current_meter)}</strong>
           <em>${latestReading?.reading_date || "No current reading yet"}</em>
         </article>
-        <article class="wallet-summary-card">
+        <article class="wallet-summary-card elec-estimate-card">
           <span>Usage / Estimate</span>
-          <strong>${meterValue(summary.kwh_used)} kWh</strong>
-          <em>${money(summary.estimated_amount)}</em>
+          <strong class="elec-peso-estimate">${money(summary.estimated_amount)}</strong>
+          <em>${meterValue(summary.kwh_used)} kWh used</em>
         </article>
       </div>
       <div class="grid two" style="margin-top:12px">
@@ -1408,6 +1427,7 @@ function auditView() {
 }
 
 function settingsView() {
+  const buildMarker = window.__TRZ_ENV__?.BUILD_MARKER ?? "dev";
   return `
     <div class="page-stack">
       <div class="page-header">
@@ -1421,6 +1441,7 @@ function settingsView() {
       ${automationView()}
       ${securitySettingsSection()}
       ${isManagerViewUnlocked() ? adminToolsView() : ""}
+      <p class="build-marker">Build: ${escapeHtml(buildMarker)}</p>
     </div>`;
 }
 
@@ -1698,7 +1719,10 @@ function bookingActionModal(context) {
 
         <!-- Sticky action buttons -->
         <div class="bm-sticky-actions">
-          ${actions.map((action) => `<button type="button" ${action.disabled ? "disabled" : ""} class="${action.id === "cancel" ? "danger" : ""}" data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`).join("")}
+          ${actions.map((action) => {
+            const cls = action.style === "danger" ? "danger" : action.style === "warning" ? "btn-warning" : "";
+            return `<button type="button" ${action.disabled ? "disabled" : ""} class="${cls}" data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`;
+          }).join("")}
         </div>
 
         ${isManagerViewUnlocked() ? `<details class="testing-actions">
@@ -1753,6 +1777,7 @@ function guestProfileModal(context) {
 
 function editBookingModal(context) {
   const booking = context.booking;
+  const guest = state.guests.find((g) => g.id === booking.guest_id);
   const version = state.package_versions.find((item) => item.id === booking.package_version_id);
   const checkinDate = dateInputValue(new Date(booking.start_at));
   const checkoutDate = dateInputValue(new Date(booking.end_at));
@@ -1768,21 +1793,29 @@ function editBookingModal(context) {
         </div>
         <form data-action="booking-edit" data-booking-date-form>
           <input type="hidden" name="booking_id" value="${booking.id}" />
-          <label class="field"><span>Guest</span><select name="guest_id" required>${state.guests.map((guest) => `<option value="${guest.id}" ${guest.id === booking.guest_id ? "selected" : ""}>${escapeHtml(guest.full_name)} - ${escapeHtml(guest.phone)}</option>`).join("")}</select></label>
-          <label class="field"><span>Package</span><select name="package_version_id" data-booking-package required>${state.packages.map((pkg) => {
+
+          <h4 class="form-section-title">Guest</h4>
+          <label class="field"><span class="field-required">Guest</span><select name="guest_id" required>${state.guests.map((g) => `<option value="${g.id}" ${g.id === booking.guest_id ? "selected" : ""}>${escapeHtml(g.full_name)} - ${escapeHtml(g.phone)}</option>`).join("")}</select></label>
+          <label class="field"><span>Guest Email</span><input name="guest_email" type="email" value="${escapeHtml(guest?.email || "")}" placeholder="email@example.com" /></label>
+
+          <h4 class="form-section-title">Stay Details</h4>
+          <label class="field"><span class="field-required">Package</span><select name="package_version_id" data-booking-package required>${state.packages.map((pkg) => {
             const item = latestPackageVersion(pkg.id);
             if (!item) return "";
             return `<option value="${item.id}" ${item.id === booking.package_version_id ? "selected" : ""}>${escapeHtml(pkg.name)} v${item.version_number} - ${money(item.price)}</option>`;
           }).join("")}</select></label>
           <div class="grid two">
-            <label class="field"><span>Check-in date</span><input name="checkin_date" type="date" value="${checkinDate}" required /></label>
+            <label class="field"><span class="field-required">Check-in date</span><input name="checkin_date" type="date" value="${checkinDate}" required /></label>
             <label class="field" data-checkout-field><span>Check-out date</span><input name="checkout_date" type="date" value="${version?.is_overnight ? checkoutDate : ""}" /></label>
-            <label class="field"><span>Pax</span><input name="pax_count" type="number" min="1" value="${booking.pax_count}" required /></label>
-            <label class="field"><span>Security deposit</span><input name="security_deposit_amount" type="number" min="0" value="${Number(booking.security_deposit_amount || DEFAULT_SECURITY_DEPOSIT)}" required /></label>
+            <label class="field"><span class="field-required">Pax</span><input name="pax_count" type="number" min="1" value="${booking.pax_count}" required /></label>
+            <label class="field"><span class="field-required">Security deposit</span><input name="security_deposit_amount" type="number" min="0" value="${Number(booking.security_deposit_amount || DEFAULT_SECURITY_DEPOSIT)}" required /></label>
           </div>
           <p class="muted" data-booking-time-summary></p>
           <p class="message" data-booking-price-summary>Choose package and dates to calculate price.</p>
-          <label class="field"><span>Notes</span><textarea name="notes">${escapeHtml(booking.notes || "")}</textarea></label>
+
+          <h4 class="form-section-title">Notes</h4>
+          <label class="field"><span>Internal Notes</span><textarea name="notes">${escapeHtml(booking.notes || "")}</textarea></label>
+
           <div class="actions">
             <button class="primary">Save Booking Changes</button>
             <button type="button" data-action="close-modal">Cancel</button>
@@ -1808,10 +1841,11 @@ function cancelBookingModal(context) {
           </div>
           <button type="button" class="btn-close" data-action="close-modal">✕</button>
         </div>
-        <p class="message">This will mark the booking as Cancelled. Deposits and revenue are not automatically refunded.</p>
+        <p class="message">This will mark the booking as Cancelled. All financial records, deposits, and ledger entries are preserved. This action requires Manager approval.</p>
         <form data-action="booking-cancel">
           <input type="hidden" name="booking_id" value="${booking.id}" />
-          <label class="field"><span>Cancellation Reason</span><textarea name="reason" required placeholder="Reason for cancellation…"></textarea></label>
+          <label class="field"><span class="field-required">Cancellation Reason</span><textarea name="reason" required placeholder="Reason for cancellation…"></textarea></label>
+          <label class="field"><span class="field-required">Manager Security Code</span><input name="manager_code" type="password" inputmode="numeric" required /></label>
           <div class="actions">
             <button class="danger-button">Confirm Cancellation</button>
             <button type="button" data-action="close-modal">Keep Booking</button>
@@ -1889,31 +1923,62 @@ function confirmBookingDepositModal(context) {
 }
 
 function bookingActionsForStatus(booking) {
+  // Archived — read-only
   if (booking.status === "Archived") {
     return [{ id: "history", label: "View Booking History", disabled: true }];
   }
-  if (["Completed", "Cancelled", "Refunded"].includes(booking.status)) {
+
+  // Cancelled — separate restore flow; no normal revert
+  if (booking.status === "Cancelled") {
     return [
-      { id: "history", label: "View History", disabled: true },
-      { id: "archive", label: "Archive Booking" }
+      { id: "edit-email", label: "Update Guest Email" },
+      { id: "restore-cancelled", label: "Restore Booking", style: "warning" },
+      { id: "archive", label: "Archive Booking", style: "danger" }
     ];
   }
+
+  // Refunded — limited actions
+  if (booking.status === "Refunded") {
+    return [
+      { id: "edit-email", label: "Update Guest Email" },
+      { id: "archive", label: "Archive Booking", style: "danger" }
+    ];
+  }
+
+  // Completed — no more payments; allow email update, archive
+  if (booking.status === "Completed") {
+    return [
+      { id: "edit-email", label: "Update Guest Email" },
+      { id: "revert", label: "Revert Status", style: "warning" },
+      { id: "archive", label: "Archive Booking", style: "danger" }
+    ];
+  }
+
+  // Checked In — live stay; no booking edit; allow email update and revert
   if (booking.status === "Checked In") {
     return [
+      { id: "edit-email", label: "Update Guest Email" },
       { id: "payment", label: "Record Additional Payment" },
       { id: "damage", label: "Record Damage/Penalty" },
-      { id: "checkout", label: "Check Out" }
+      { id: "checkout", label: "Check Out" },
+      { id: "revert", label: "Revert Status", style: "warning" }
     ];
   }
+
+  // Pre-stay active statuses — full action set
   const actions = [
     { id: "edit", label: "Edit Booking" },
     { id: "payment", label: "Record Payment" },
     { id: "deposit", label: "Record Deposit" },
     { id: "checkin", label: "Check In" },
-    { id: "cancel", label: "Cancel Booking" }
+    { id: "cancel", label: "Cancel Booking", style: "danger" }
   ];
   if (booking.status === "Deposit Requested") {
     actions.unshift({ id: "confirm", label: "Confirm Booking" });
+  }
+  // Show Revert for any status that has rollback targets
+  if (REVERT_TARGETS[booking.status]) {
+    actions.push({ id: "revert", label: "Revert Status", style: "warning" });
   }
   return actions;
 }
@@ -2098,7 +2163,6 @@ function bindForms() {
   bindQuickBookingPopup();
   bindPostStayEmail();
   bindGuestMemory();
-  renderFloatingActions();
   document.querySelectorAll("form[data-action]").forEach((form) => {
     if (form.dataset.action === "unlock") return;
     if (form.dataset.action === "quick-booking-prefill") return;
@@ -2124,6 +2188,9 @@ function bindForms() {
         }
         if (form.dataset.action === "booking-edit") await updateBookingDetails(fields);
         if (form.dataset.action === "booking-cancel") await cancelBooking(fields);
+        if (form.dataset.action === "booking-revert-status") await revertBookingStatus(fields);
+        if (form.dataset.action === "booking-restore-cancelled") await restoreCancelledBooking(fields);
+        if (form.dataset.action === "update-guest-email") await updateGuestEmail(fields);
         if (form.dataset.action === "booking-notes") await updateBookingNotes(fields);
         if (form.dataset.action === "wallet") await createWallet(fields);
         if (form.dataset.action === "ledger") await recordLedger(fields);
@@ -2298,6 +2365,10 @@ function bindBookingSearch() {
 function bindCalendarActions() {
   document.querySelectorAll("[data-open-date]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.calCell !== undefined && window.innerWidth <= 760) {
+        showCalendarDetail(null, button.dataset.openDate);
+        return;
+      }
       quickBookingContext = { date: button.dataset.openDate };
       createBookingContext = null;
       bookingActionContext = null;
@@ -2308,11 +2379,65 @@ function bindCalendarActions() {
     button.addEventListener("click", () => {
       const booking = state.bookings.find((item) => item.id === button.dataset.openBooking);
       if (!booking) return;
+      if (button.dataset.calCell !== undefined && window.innerWidth <= 760) {
+        showCalendarDetail(booking, null);
+        return;
+      }
       bookingActionContext = { booking };
       createBookingContext = null;
       guestProfileContext = null;
       render();
     });
+  });
+}
+
+function showCalendarDetail(booking, dateStr) {
+  calendarSelectedDate = booking ? booking.id : dateStr;
+  const panel = document.getElementById("cal-detail-panel");
+  if (!panel) return;
+  if (!booking) {
+    const d = new Date(dateStr + "T00:00:00");
+    const formatted = d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+    panel.hidden = false;
+    panel.innerHTML = `
+      <div class="cal-detail-date">${formatted}</div>
+      <p class="cal-detail-empty">No booking on this date.</p>
+      <div class="cal-detail-actions">
+        <button type="button" class="primary cal-detail-new-btn">+ New Booking</button>
+      </div>`;
+    panel.querySelector(".cal-detail-new-btn").addEventListener("click", () => {
+      quickBookingContext = { date: dateStr };
+      createBookingContext = null;
+      bookingActionContext = null;
+      render();
+    });
+    return;
+  }
+  const gName = guestNameText(booking.guest_id);
+  const guest = state.guests.find((g) => g.id === booking.guest_id);
+  const pkg = state.package_versions.find((v) => v.id === booking.package_version_id);
+  const pkgName = pkg ? (state.packages.find((p) => p.id === pkg.package_id)?.name ?? "") : "";
+  const sc = bookingStatusClass(booking.status);
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="cal-detail-header">
+      <span class="pill${sc ? ` pill-${sc}` : ""}">${booking.status}</span>
+      <span class="cal-detail-code">${escapeHtml(shortBookingCode(booking.booking_code))}</span>
+    </div>
+    <div class="cal-detail-guest">${escapeHtml(gName)}</div>
+    <div class="cal-detail-meta">
+      <span>${escapeHtml(booking.start_at ? booking.start_at.slice(0, 10) : "")}${booking.end_at ? " → " + booking.end_at.slice(0, 10) : ""}</span>
+      ${pkgName ? `<span>${escapeHtml(pkgName)}</span>` : ""}
+      ${guest?.phone ? `<span>${escapeHtml(guest.phone)}</span>` : ""}
+    </div>
+    <div class="cal-detail-actions">
+      <button type="button" class="primary cal-detail-view-btn">View Full Booking</button>
+    </div>`;
+  panel.querySelector(".cal-detail-view-btn").addEventListener("click", () => {
+    bookingActionContext = { booking };
+    createBookingContext = null;
+    guestProfileContext = null;
+    render();
   });
 }
 
@@ -2419,6 +2544,26 @@ function bindBookingActionButtons() {
         if (action === "cancel") {
           bookingActionContext = null;
           cancelBookingContext = { booking };
+          render();
+        }
+        if (action === "revert") {
+          const targets = REVERT_TARGETS[booking.status] || [];
+          if (targets.length === 0) {
+            showMessage("No valid revert targets for the current status.", "error");
+            return;
+          }
+          bookingActionContext = null;
+          revertStatusContext = { booking };
+          render();
+        }
+        if (action === "restore-cancelled") {
+          bookingActionContext = null;
+          restoreCancelledContext = { booking };
+          render();
+        }
+        if (action === "edit-email") {
+          bookingActionContext = null;
+          editGuestEmailContext = { booking };
           render();
         }
         if (action === "archive") {
@@ -2573,6 +2718,17 @@ async function updateBookingDetails(fields) {
   const oldRange = formatRange(before);
   const newRange = `${formatDate(range.start_at)} to ${formatDate(range.end_at)}`;
   const dateChanged = before.start_at !== range.start_at || before.end_at !== range.end_at;
+
+  // Update guest email if the field was present and changed
+  const newEmail = fields.guest_email?.trim() || null;
+  const guestBefore = state.guests.find((g) => g.id === fields.guest_id);
+  const oldEmail = guestBefore?.email?.trim() || null;
+  if (newEmail !== oldEmail) {
+    const [guestAfter] = await update("guests", fields.guest_id, { email: newEmail });
+    await createAudit("guest", fields.guest_id, "guest_edit", guestBefore, guestAfter,
+      `Email updated from "${oldEmail || "none"}" to "${newEmail || "none"}"`);
+  }
+
   try {
     const [after] = await update("bookings", fields.booking_id, payload);
     await createAudit(
@@ -2597,10 +2753,167 @@ async function cancelBooking(fields) {
   const before = state.bookings.find((booking) => booking.id === fields.booking_id);
   if (!before) throw new Error("Booking not found.");
   if (!fields.reason?.trim()) throw new Error("Cancellation reason is required.");
+  const managerOk = await rpc("verify_manager_security_code", { input_code: fields.manager_code });
+  if (!managerOk) throw new Error("Wrong Manager Security Code.");
   const [after] = await update("bookings", fields.booking_id, { status: "Cancelled" });
-  await createAudit("booking", fields.booking_id, "status_change", before, after, `Cancelled: ${fields.reason.trim()}`);
+  await createAudit("booking", fields.booking_id, "status_change", before, after,
+    `Cancelled: ${fields.reason.trim()}`);
   cancelBookingContext = null;
   bookingActionContext = { booking: after };
+}
+
+// ── Revert Status ─────────────────────────────────────────────────────────────
+
+function revertStatusModal(context) {
+  const booking = context.booking;
+  const targets = REVERT_TARGETS[booking.status] || [];
+  const initial = guestNameText(booking.guest_id).charAt(0).toUpperCase();
+  return `
+    <div class="modal-backdrop">
+      <section class="panel modal">
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>Revert Status</h2>
+              <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
+        </div>
+        <p class="message">Current status: <strong>${booking.status}</strong>. Reverting is permanent and logged. All financial records remain unchanged.</p>
+        <form data-action="booking-revert-status">
+          <input type="hidden" name="booking_id" value="${booking.id}" />
+          <label class="field"><span class="field-required">Revert to</span><select name="target_status" required>${targets.map((s) => `<option value="${s}">${s}</option>`).join("")}</select></label>
+          <label class="field"><span class="field-required">Reason</span><textarea name="reason" required placeholder="Why is this status being reverted?"></textarea></label>
+          <label class="field"><span class="field-required">Manager Security Code</span><input name="manager_code" type="password" inputmode="numeric" required /></label>
+          <div class="actions">
+            <button class="btn-warning">Confirm Revert</button>
+            <button type="button" data-action="close-modal">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>`;
+}
+
+async function revertBookingStatus(fields) {
+  const before = state.bookings.find((b) => b.id === fields.booking_id);
+  if (!before) throw new Error("Booking not found.");
+  const targets = REVERT_TARGETS[before.status] || [];
+  if (!targets.includes(fields.target_status)) {
+    throw new Error(`Cannot revert "${before.status}" to "${fields.target_status}".`);
+  }
+  if (!fields.reason?.trim()) throw new Error("Reason is required.");
+  const managerOk = await rpc("verify_manager_security_code", { input_code: fields.manager_code });
+  if (!managerOk) throw new Error("Wrong Manager Security Code.");
+  const [after] = await update("bookings", fields.booking_id, { status: fields.target_status });
+  await createAudit("booking", fields.booking_id, "status_change", before, after,
+    `Status reverted from "${before.status}" to "${fields.target_status}": ${fields.reason.trim()}`);
+  revertStatusContext = null;
+  bookingActionContext = { booking: after };
+}
+
+// ── Restore Cancelled Booking ─────────────────────────────────────────────────
+
+function restoreCancelledModal(context) {
+  const booking = context.booking;
+  const initial = guestNameText(booking.guest_id).charAt(0).toUpperCase();
+  return `
+    <div class="modal-backdrop">
+      <section class="panel modal">
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>Restore Cancelled Booking</h2>
+              <span class="bm-subtitle">${booking.booking_code} &middot; ${guestName(booking.guest_id)}</span>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
+        </div>
+        <p class="message">Restoring will reactivate this booking. All existing ledger, deposit, audit, and timeline records are preserved exactly as they were.</p>
+        <form data-action="booking-restore-cancelled">
+          <input type="hidden" name="booking_id" value="${booking.id}" />
+          <label class="field"><span class="field-required">Restore to</span><select name="target_status" required>
+            <option value="Inquiry">Inquiry</option>
+            <option value="Tentative">Tentative</option>
+          </select></label>
+          <label class="field"><span class="field-required">Reason</span><textarea name="reason" required placeholder="Why is this booking being restored?"></textarea></label>
+          <label class="field"><span class="field-required">Manager Security Code</span><input name="manager_code" type="password" inputmode="numeric" required /></label>
+          <div class="actions">
+            <button class="primary">Restore Booking</button>
+            <button type="button" data-action="close-modal">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>`;
+}
+
+async function restoreCancelledBooking(fields) {
+  const before = state.bookings.find((b) => b.id === fields.booking_id);
+  if (!before) throw new Error("Booking not found.");
+  if (before.status !== "Cancelled") throw new Error("Only Cancelled bookings can be restored with this action.");
+  if (!["Inquiry", "Tentative"].includes(fields.target_status)) {
+    throw new Error("Cancelled bookings can only be restored to Inquiry or Tentative.");
+  }
+  if (!fields.reason?.trim()) throw new Error("Reason is required.");
+  const managerOk = await rpc("verify_manager_security_code", { input_code: fields.manager_code });
+  if (!managerOk) throw new Error("Wrong Manager Security Code.");
+  const [after] = await update("bookings", fields.booking_id, { status: fields.target_status });
+  await createAudit("booking", fields.booking_id, "status_change", before, after,
+    `Cancelled booking restored to "${fields.target_status}": ${fields.reason.trim()}`);
+  restoreCancelledContext = null;
+  bookingActionContext = { booking: after };
+}
+
+// ── Update Guest Email (standalone, for statuses without Edit Booking) ─────────
+
+function editGuestEmailModal(context) {
+  const booking = context.booking;
+  const guest = state.guests.find((g) => g.id === booking.guest_id);
+  const initial = guestNameText(booking.guest_id).charAt(0).toUpperCase();
+  return `
+    <div class="modal-backdrop">
+      <section class="panel modal">
+        <div class="bm-header">
+          <div class="bm-header-left">
+            <div class="guest-avatar">${initial}</div>
+            <div>
+              <h2>Update Guest Email</h2>
+              <span class="bm-subtitle">${guestName(booking.guest_id)}</span>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-action="close-modal">✕</button>
+        </div>
+        <p class="muted" style="font-size:13px;margin-bottom:12px">Current email: <strong>${escapeHtml(guest?.email || "None")}</strong></p>
+        <form data-action="update-guest-email">
+          <input type="hidden" name="booking_id" value="${booking.id}" />
+          <input type="hidden" name="guest_id" value="${booking.guest_id}" />
+          <label class="field"><span>New Email Address</span><input name="guest_email" type="email" value="${escapeHtml(guest?.email || "")}" placeholder="email@example.com" /></label>
+          <div class="actions">
+            <button class="primary">Save Email</button>
+            <button type="button" data-action="close-modal">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>`;
+}
+
+async function updateGuestEmail(fields) {
+  const guest = state.guests.find((g) => g.id === fields.guest_id);
+  if (!guest) throw new Error("Guest not found.");
+  const newEmail = fields.guest_email?.trim() || null;
+  const oldEmail = guest.email?.trim() || null;
+  if (newEmail === oldEmail) {
+    editGuestEmailContext = null;
+    return;
+  }
+  const [guestAfter] = await update("guests", fields.guest_id, { email: newEmail });
+  await createAudit("guest", fields.guest_id, "guest_edit", guest, guestAfter,
+    `Email updated from "${oldEmail || "none"}" to "${newEmail || "none"}"`);
+  const booking = state.bookings.find((b) => b.id === fields.booking_id);
+  editGuestEmailContext = null;
+  if (booking) bookingActionContext = { booking };
 }
 
 function bindDatePickerOpeners() {
@@ -2628,6 +2941,9 @@ function closeAllModals() {
   guestProfileContext = null;
   editBookingContext = null;
   cancelBookingContext = null;
+  revertStatusContext = null;
+  restoreCancelledContext = null;
+  editGuestEmailContext = null;
   transactionContext = null;
   confirmBookingDeposit = null;
   checkinPayment = null;
@@ -2668,6 +2984,10 @@ async function archiveBooking(booking) {
   if (!["Completed", "Cancelled", "Refunded"].includes(booking.status)) {
     throw new Error("Only Completed, Cancelled, or Refunded bookings can be archived.");
   }
+  const managerCode = window.prompt("Manager Security Code required to archive this booking:");
+  if (!managerCode) return;
+  const managerOk = await rpc("verify_manager_security_code", { input_code: managerCode });
+  if (!managerOk) throw new Error("Wrong Manager Security Code.");
   const [after] = await update("bookings", booking.id, { status: "Archived" });
   await createAudit("booking", booking.id, "status_change", booking, after, "Booking archived");
   bookingActionContext = null;
@@ -3883,72 +4203,6 @@ function bindBookingNavButtons() {
       if (!booking) return;
       bookingActionContext = { booking };
       render();
-    });
-  });
-}
-
-// ── Feature 6: Floating Quick Actions ─────────────────────────────
-
-function renderFloatingActions() {
-  document.getElementById("trz-fab")?.remove();
-  if (!isAccessUnlocked()) return;
-
-  const fab = document.createElement("div");
-  fab.id = "trz-fab";
-  fab.innerHTML = `
-    <button type="button" id="trz-fab-toggle" title="Quick actions" aria-label="Quick actions">+</button>
-    <div id="trz-fab-menu" hidden>
-      <button type="button" data-fab-action="new-booking">New Booking</button>
-      <button type="button" data-fab-action="go-bookings">Go to Bookings</button>
-      <button type="button" data-fab-action="checkin-today">Check In Today</button>
-      <button type="button" data-fab-action="checkout-today">Check Out Today</button>
-    </div>`;
-  document.body.appendChild(fab);
-
-  fab.querySelector("#trz-fab-toggle").addEventListener("click", () => {
-    const menu = fab.querySelector("#trz-fab-menu");
-    menu.hidden = !menu.hidden;
-    fab.querySelector("#trz-fab-toggle").textContent = menu.hidden ? "+" : "✕";
-  });
-
-  fab.querySelectorAll("[data-fab-action]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      fab.querySelector("#trz-fab-menu").hidden = true;
-      fab.querySelector("#trz-fab-toggle").textContent = "+";
-      const action = btn.dataset.fabAction;
-      if (action === "new-booking") {
-        createBookingContext = { checkin_date: "" };
-        quickBookingContext = null;
-        bookingActionContext = null;
-        render();
-      } else if (action === "go-bookings") {
-        activeTab = "bookings";
-        render();
-      } else if (action === "checkin-today") {
-        const today = new Date();
-        const booking = state.bookings.find(
-          (b) => sameLocalDate(new Date(b.start_at), today) &&
-                 !["Checked In", "Completed", "Cancelled", "Archived", "Refunded"].includes(b.status)
-        );
-        if (booking) {
-          bookingActionContext = { booking };
-          createBookingContext = null;
-          quickBookingContext = null;
-          render();
-        } else {
-          showMessage("No check-in due today.", "");
-        }
-      } else if (action === "checkout-today") {
-        const booking = state.bookings.find((b) => b.status === "Checked In");
-        if (booking) {
-          bookingActionContext = { booking };
-          createBookingContext = null;
-          quickBookingContext = null;
-          render();
-        } else {
-          showMessage("No guest is currently checked in.", "");
-        }
-      }
     });
   });
 }

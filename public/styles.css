@@ -43,6 +43,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html { overflow-x: hidden; }
+
 /* ─── Animations ─────────────────────────────────────────────────── */
 
 @keyframes fade-in {
@@ -281,6 +283,15 @@ button.primary:hover:not(:disabled) {
 
 button.danger { border-color: rgba(248,113,113,0.2); color: var(--danger); }
 button.danger:hover:not(:disabled) { background: rgba(248,113,113,0.07); border-color: rgba(248,113,113,0.4); }
+button.btn-warning {
+  background: rgba(245,158,11,0.08);
+  border-color: rgba(245,158,11,0.35);
+  color: #fcd34d;
+}
+button.btn-warning:hover:not(:disabled) {
+  background: rgba(245,158,11,0.15);
+  border-color: rgba(245,158,11,0.55);
+}
 button.danger-button {
   background: rgba(248,113,113,0.09);
   border-color: rgba(248,113,113,0.35);
@@ -358,6 +369,37 @@ pre {
 
 .field { display: grid; gap: 6px; }
 .field > span { color: rgba(143,163,151,0.8); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* Required-field asterisk — applied to <span class="field-required"> inside .field */
+.field-required::after { content: " *"; color: #f87171; }
+
+/* Form section dividers */
+.form-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(143,163,151,0.55);
+  margin: 18px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(143,163,151,0.12);
+}
+.form-section-title:first-child { margin-top: 4px; }
+
+/* Sub-label hint line below a field */
+.form-field-hint {
+  font-size: 11px;
+  color: rgba(143,163,151,0.5);
+  margin: -2px 0 6px;
+}
+
+/* Required hint line at top of form */
+.form-required-hint {
+  font-size: 11px;
+  color: rgba(143,163,151,0.5);
+  margin: 0 0 10px;
+}
+.required-star { color: #f87171; font-weight: 700; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
@@ -1182,56 +1224,6 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
 .bm-nav-btn:disabled { cursor: default; opacity: 0.3; }
 .bm-nav-btn:not(:disabled):hover { background: rgba(255,255,255,0.10); }
 
-/* Feature 6: Floating Quick Actions */
-#trz-fab {
-  bottom: 24px;
-  position: fixed;
-  right: 24px;
-  z-index: 150;
-}
-#trz-fab-toggle {
-  background: var(--accent);
-  border: none;
-  border-radius: 50%;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  color: #0d1f14;
-  cursor: pointer;
-  font-size: 22px;
-  font-weight: 700;
-  height: 52px;
-  line-height: 1;
-  transition: background 0.15s, transform 0.15s;
-  width: 52px;
-}
-#trz-fab-toggle:hover { background: #e8d070; transform: scale(1.06); }
-#trz-fab-menu {
-  background: var(--panel);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: var(--r-sm);
-  bottom: 62px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 200px;
-  padding: 8px;
-  position: absolute;
-  right: 0;
-}
-#trz-fab-menu button {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: var(--r-sm);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 10px 14px;
-  text-align: left;
-  transition: background 0.12s;
-}
-#trz-fab-menu button:hover { background: rgba(255,255,255,0.09); }
-
 /* Feature 7: Quick Booking Popup */
 .quick-popup { max-width: 420px; }
 
@@ -1452,6 +1444,19 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
+/* ─── Build Marker ───────────────────────────────────────────────── */
+.build-marker { color: rgba(143,163,151,0.35); font-size: 10px; letter-spacing: 0.04em; margin-top: 24px; padding: 0 4px 16px; text-align: center; }
+
+/* ─── Calendar Detail Panel (mobile only) ────────────────────────── */
+.cal-detail-panel  { display: none; }
+.cal-detail-header { align-items: center; display: flex; gap: 8px; margin-bottom: 8px; }
+.cal-detail-code   { color: var(--muted); font-size: 11px; }
+.cal-detail-guest  { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.cal-detail-meta   { color: var(--muted); display: flex; flex-direction: column; font-size: 12px; gap: 3px; margin-bottom: 10px; }
+.cal-detail-date   { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.cal-detail-empty  { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.cal-detail-actions { margin-top: 8px; }
+
 /* ─── Mobile ─────────────────────────────────────────────────────── */
 
 @media (max-width: 760px) {
@@ -1521,7 +1526,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   }
 
   /* ── Tabs → compact horizontal scroll row ─────────────────────── */
-  main { margin-left: 0; }
+  main { margin-left: 0; width: 100%; }
 
   .tabs {
     background: rgba(9,26,17,0.95);
@@ -1635,7 +1640,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   .calendar-header { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
   .calendar-legend { display: none; } /* legend replaced by hover titles + Upcoming list */
   .calendar-nav    { gap: 3px; width: 100%; }
-  .calendar-nav button { flex: 1; font-size: 11px; min-height: 36px; padding: 5px 4px; }
+  .calendar-nav button { flex: 1; font-size: 11px; min-height: 44px; padding: 5px 4px; }
 
   .calendar-grid    { gap: 2px; }
   .calendar-weekdays { font-size: 9px; letter-spacing: 0; margin-bottom: 2px; }
@@ -1643,7 +1648,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   /* Compact cells: show date number + colored strip only — no text label */
   .calendar-day {
     border-radius: 4px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 3px 4px;
     transition: none;
   }
@@ -1654,8 +1659,6 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   .bm-snapshot { grid-template-columns: repeat(2, 1fr); }
   .bm-copy-row { gap: 4px; }
   .copy-btn { font-size: 10px; padding: 4px 8px; }
-  #trz-fab { bottom: 16px; right: 14px; }
-  #trz-fab-toggle { height: 46px; width: 46px; }
   .bm-sticky-actions { padding: 10px 14px; }
 
   /* ── Modals ───────────────────────────────────────────────────── */
@@ -1700,6 +1703,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   .bm-fin-row { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .bm-fin-item { padding: 8px; }
   .bm-fin-item strong { font-size: 12px; }
+  .bm-nav-btn { min-height: 44px; min-width: 44px; }
 
   /* ── Settlement summary → 2-column ───────────────────────────── */
   .settlement-summary { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -1708,6 +1712,7 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   /* ── Wallet / Finance ─────────────────────────────────────────── */
   .wallet-summary-grid  { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
   .wallet-summary-card strong { font-size: 16px; }
+  .elec-estimate-card .elec-peso-estimate { font-size: 22px; }
   .finance-summary-grid { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
   .finance-filter-form  { grid-template-columns: 1fr; }
   .fin-kpi-row   { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -1724,4 +1729,14 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   /* ── Hero stat row (used in old hero section, kept for safety) ── */
   .hero-stat-row { gap: 8px; grid-template-columns: repeat(3, minmax(0,1fr)); }
   .hero-stat-row strong { font-size: 16px; }
+
+  /* ── Calendar detail panel ────────────────────────────────────── */
+  .cal-detail-panel:not([hidden]) {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    display: block;
+    margin-top: 8px;
+    padding: 14px;
+  }
 }

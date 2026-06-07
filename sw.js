@@ -1,4 +1,4 @@
-const CACHE_NAME = "trz-pms-shell-v2";
+const CACHE_NAME = "BUILD_TIMESTAMP";
 const CACHE_ASSETS = [
   "./",
   "./index.html",
@@ -58,36 +58,46 @@ self.addEventListener("fetch", (event) => {
 
   if (request.method !== "GET" || shouldBypassCache(url)) return;
 
-  if (request.mode === "navigate") {
+  // Network-first: navigation + JS/CSS/HTML shell assets — always tries the network so
+  // updated app.js and styles.css are fetched immediately after a new deployment.
+  if (request.mode === "navigate" || isShellAsset(url)) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", clone));
-          return response;
-        })
-        .catch(() => new Response(OFFLINE_HTML, {
-          status: 200,
-          headers: { "Content-Type": "text/html" }
-        }))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request)
-        .then((response) => {
-          if (isCacheableShellAsset(url, response)) {
+          if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
           }
           return response;
         })
-        .catch(() => {
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          if (request.mode === "navigate") {
+            return new Response(OFFLINE_HTML, {
+              status: 200,
+              headers: { "Content-Type": "text/html" }
+            });
+          }
           return Response.error();
-        });
+        })
+    );
+    return;
+  }
+
+  // Cache-first: images, icons, and other static assets that rarely change.
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request)
+        .then((response) => {
+          if (response.ok && url.origin === self.location.origin) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => Response.error())
     })
   );
 });
@@ -100,7 +110,7 @@ function shouldBypassCache(url) {
   return false;
 }
 
-function isCacheableShellAsset(url, response) {
-  if (!response || response.status !== 200 || url.origin !== self.location.origin) return false;
-  return /\.(html|css|js|webmanifest|svg|png|ico)$/.test(url.pathname) || url.pathname === "/";
+function isShellAsset(url) {
+  if (url.origin !== self.location.origin) return false;
+  return /\.(js|css|html|webmanifest)$/.test(url.pathname) || url.pathname === "/";
 }

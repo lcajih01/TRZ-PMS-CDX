@@ -1224,57 +1224,6 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
 .bm-nav-btn:disabled { cursor: default; opacity: 0.3; }
 .bm-nav-btn:not(:disabled):hover { background: rgba(255,255,255,0.10); }
 
-/* Feature 6: Floating Quick Actions */
-#trz-fab {
-  bottom: 24px;
-  position: fixed;
-  right: 24px;
-  z-index: 150;
-}
-#trz-fab-toggle {
-  background: var(--accent);
-  border: none;
-  border-radius: 50%;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  color: #0d1f14;
-  cursor: pointer;
-  font-size: 22px;
-  font-weight: 700;
-  height: 52px;
-  line-height: 1;
-  transition: background 0.15s, transform 0.15s;
-  width: 52px;
-}
-#trz-fab-toggle:hover { background: #e8d070; transform: scale(1.06); }
-#trz-fab-menu {
-  background: var(--panel);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: var(--r-sm);
-  bottom: 62px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 200px;
-  padding: 8px;
-  position: absolute;
-  right: 0;
-}
-#trz-fab-menu button {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: var(--r-sm);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 10px 14px;
-  text-align: left;
-  transition: background 0.12s;
-}
-#trz-fab-menu button:hover { background: rgba(255,255,255,0.09); }
-#trz-fab-backdrop { cursor: default; display: none; inset: 0; position: fixed; z-index: 149; }
-
 /* Feature 7: Quick Booking Popup */
 .quick-popup { max-width: 420px; }
 
@@ -1495,6 +1444,9 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
+/* ─── Build Marker ───────────────────────────────────────────────── */
+.build-marker { color: rgba(143,163,151,0.35); font-size: 10px; letter-spacing: 0.04em; margin-top: 24px; padding: 0 4px 16px; text-align: center; }
+
 /* ─── Calendar Detail Panel (mobile only) ────────────────────────── */
 .cal-detail-panel  { display: none; }
 .cal-detail-header { align-items: center; display: flex; gap: 8px; margin-bottom: 8px; }
@@ -1707,8 +1659,6 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
   .bm-snapshot { grid-template-columns: repeat(2, 1fr); }
   .bm-copy-row { gap: 4px; }
   .copy-btn { font-size: 10px; padding: 4px 8px; }
-  #trz-fab { bottom: 16px; right: 14px; }
-  #trz-fab-toggle { height: 46px; width: 46px; }
   .bm-sticky-actions { padding: 10px 14px; }
 
   /* ── Modals ───────────────────────────────────────────────────── */

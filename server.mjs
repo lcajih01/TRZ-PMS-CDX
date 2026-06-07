@@ -79,7 +79,10 @@ createServer(async (req, res) => {
 
   try {
     const body = await readFile(filePath);
-    res.writeHead(200, { "Content-Type": types[extname(filePath)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": types[extname(filePath)] || "application/octet-stream",
+      "Cache-Control": cacheControlFor(requested)
+    });
     res.end(body);
   } catch {
     res.writeHead(500);
@@ -98,6 +101,18 @@ async function readJson(req) {
 function sendJson(res, status, payload) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
+}
+
+function cacheControlFor(pathname) {
+  // Service worker must never be served from HTTP cache — browsers must always byte-check it.
+  if (pathname === "/sw.js") return "no-cache, no-store, must-revalidate";
+  // Shell assets: no HTTP caching so the SW's network-first fetch always hits the server.
+  const ext = extname(pathname);
+  if ([".js", ".css", ".html", ".webmanifest"].includes(ext) || pathname === "/index.html") {
+    return "no-cache, must-revalidate";
+  }
+  // Images and icons: safe to cache for 24 h.
+  return "public, max-age=86400";
 }
 
 async function loadEnv() {
