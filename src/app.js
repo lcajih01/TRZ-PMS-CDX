@@ -631,6 +631,7 @@ function calendarSegmentsForDay(day) {
     const startsToday = sameLocalDate(start, day);
     const endsToday = sameLocalDate(end, day);
     const isOvernightOccupiedDay = overnightOccupiedDateKeys(booking.start_at, booking.end_at).includes(dayKey);
+    if (!startsToday && endsToday && !isOvernightOccupiedDay) return null;
     let kind = "reserved";
     let label = booking.status;
     const futureHoldStatus = ["Inquiry", "Tentative", "Deposit Requested", "Deposit Received", "Confirmed"].includes(booking.status);
@@ -644,9 +645,6 @@ function calendarSegmentsForDay(day) {
     } else if (startsToday) {
       kind = occupiedStatus ? "checkin" : `${calendarHoldKind(booking.status)}-checkin`;
       label = occupiedStatus ? "Check-In" : `${booking.status} Check-In`;
-    } else if (endsToday) {
-      kind = "checkout";
-      label = `${booking.status} Check-Out`;
     } else if (occupiedStatus || isOvernightOccupiedDay) {
       kind = "occupied";
       label = "Occupied";
@@ -655,7 +653,7 @@ function calendarSegmentsForDay(day) {
       label = booking.status;
     }
     return { booking, kind, label };
-  });
+  }).filter(Boolean);
   const activeSegments = segments.filter((segment) => segment.booking.status !== "Completed");
   return activeSegments.length ? activeSegments : segments;
 }

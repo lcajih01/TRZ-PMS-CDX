@@ -127,14 +127,17 @@ assert.deepEqual(
   overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-18T12:00:00.000Z"),
   ["2026-06-17"]
 );
+assert.ok(!overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-18T12:00:00.000Z").includes("2026-06-18"));
 assert.deepEqual(
   overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-19T12:00:00.000Z"),
   ["2026-06-17", "2026-06-18"]
 );
+assert.ok(!overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-19T12:00:00.000Z").includes("2026-06-19"));
 assert.deepEqual(
   overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-20T12:00:00.000Z"),
   ["2026-06-17", "2026-06-18", "2026-06-19"]
 );
+assert.ok(!overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-20T12:00:00.000Z").includes("2026-06-20"));
 
 const completedMultiNight = completeCheckoutSettlement(state, multiNightBooking.id, manager);
 assert.equal(completedMultiNight.status, "Completed");

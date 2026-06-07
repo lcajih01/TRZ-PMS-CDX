@@ -291,6 +291,8 @@ assert.ok(app.includes("data-calendar-nav=\"next\""), "calendar must support nex
 assert.ok(app.includes("data-calendar-nav=\"today\""), "calendar must support today navigation");
 assert.ok(app.includes("overnightOccupiedDateKeys"), "calendar must use overnight occupied date keys");
 assert.ok(!app.includes("Only show a booking on its start date"), "calendar must not hide middle overnight dates");
+assert.ok(app.includes("return null"), "calendar must skip checkout-only date segments");
+assert.ok(!app.includes('kind = "checkout"'), "calendar must not render checkout date segments");
 assert.ok(app.includes("Record Expense"), "finance must support expense entry");
 assert.ok(app.includes("data-action=\"transfer\""), "finance must support wallet transfers");
 assert.ok(app.includes("Void/Reversal"), "transactions must support reversal action");
