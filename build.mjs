@@ -1,14 +1,14 @@
 import { cp, writeFile, mkdir } from "node:fs/promises";
 
-await mkdir("public", { recursive: true });
+await mkdir("public/src", { recursive: true });
+await mkdir("public/email", { recursive: true });
 
-await cp(".", "public", {
-  recursive: true,
-  filter: (src) =>
-    !src.includes("node_modules") &&
-    !src.includes(".git") &&
-    !src.includes("public")
-});
+await cp("index.html", "public/index.html");
+await cp("styles.css", "public/styles.css");
+await cp("manifest.json", "public/manifest.json").catch(() => {});
+await cp("sw.js", "public/sw.js").catch(() => {});
+await cp("offline.html", "public/offline.html").catch(() => {});
+await cp("src", "public/src", { recursive: true });
 
 await writeFile(
   "public/env.js",
