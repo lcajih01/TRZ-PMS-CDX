@@ -281,6 +281,15 @@ button.primary:hover:not(:disabled) {
 
 button.danger { border-color: rgba(248,113,113,0.2); color: var(--danger); }
 button.danger:hover:not(:disabled) { background: rgba(248,113,113,0.07); border-color: rgba(248,113,113,0.4); }
+button.btn-warning {
+  background: rgba(245,158,11,0.08);
+  border-color: rgba(245,158,11,0.35);
+  color: #fcd34d;
+}
+button.btn-warning:hover:not(:disabled) {
+  background: rgba(245,158,11,0.15);
+  border-color: rgba(245,158,11,0.55);
+}
 button.danger-button {
   background: rgba(248,113,113,0.09);
   border-color: rgba(248,113,113,0.35);
@@ -358,6 +367,37 @@ pre {
 
 .field { display: grid; gap: 6px; }
 .field > span { color: rgba(143,163,151,0.8); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* Required-field asterisk — applied to <span class="field-required"> inside .field */
+.field-required::after { content: " *"; color: #f87171; }
+
+/* Form section dividers */
+.form-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(143,163,151,0.55);
+  margin: 18px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(143,163,151,0.12);
+}
+.form-section-title:first-child { margin-top: 4px; }
+
+/* Sub-label hint line below a field */
+.form-field-hint {
+  font-size: 11px;
+  color: rgba(143,163,151,0.5);
+  margin: -2px 0 6px;
+}
+
+/* Required hint line at top of form */
+.form-required-hint {
+  font-size: 11px;
+  color: rgba(143,163,151,0.5);
+  margin: 0 0 10px;
+}
+.required-star { color: #f87171; font-weight: 700; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 

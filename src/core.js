@@ -20,6 +20,28 @@ export const BLOCKING_STATUSES = new Set([
   "Checked In"
 ]);
 
+// Valid statuses for new booking creation — post-creation statuses are
+// driven by action buttons, not the form dropdown.
+export const CREATION_STATUSES = [
+  "Inquiry",
+  "Tentative",
+  "Deposit Requested",
+  "Deposit Received",
+  "Confirmed"
+];
+
+// Allowed rollback targets per current status (manager-protected).
+// "Cancelled" is excluded — it uses the separate Restore Cancelled flow.
+export const REVERT_TARGETS = {
+  "Tentative":         ["Inquiry"],
+  "Deposit Requested": ["Tentative", "Inquiry"],
+  "Deposit Received":  ["Deposit Requested", "Tentative", "Inquiry"],
+  "Confirmed":         ["Deposit Received", "Deposit Requested", "Tentative", "Inquiry"],
+  "Checked In":        ["Confirmed"],
+  "Checked Out":       ["Checked In"],
+  "Completed":         ["Checked Out"]
+};
+
 export const ACCOUNT_TYPES = [
   "Revenue",
   "Security Deposit Liability",
