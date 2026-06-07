@@ -877,3 +877,234 @@ async function buildStayFarewellEmail({ booking, guest }) {
 
   return { subject, html, text, attachments: await farewellAttachments() };
 }
+
+export async function sendGuestMemoryEmail({ memoryId, env }) {
+  if (!memoryId) throw new Error("Memory id is required.");
+
+  const config = supabaseConfig(env);
+  const memory = await fetchSingle(config, "guest_memories", memoryId);
+
+  if (memory.status === "sent") return { ok: true, message: "Memory email already sent." };
+  if (!memory.card_url) throw new Error("Memory card has not been uploaded yet.");
+
+  const booking = await fetchSingle(config, "bookings", memory.booking_id);
+  const guest = await fetchSingle(config, "guests", booking.guest_id);
+
+  const guestEmail = (guest.email || "").trim();
+  if (!guestEmail) throw new Error("This guest has no email address on file.");
+  if (!env.RESEND_API_KEY) throw new Error("RESEND_API_KEY is not configured.");
+
+  const message = await buildGuestMemoryEmail({ booking, guest, memory });
+
+  const payload = {
+    from: sender,
+    to: [guestEmail],
+    reply_to: replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    headers: {
+      "X-Entity-Ref-ID": `${memory.booking_id}-${memory.id}`,
+      "X-Transaction-Type": "guest_memory"
+    }
+  };
+  if (message.attachments?.length) payload.attachments = message.attachments;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(errorText || res.statusText);
+  }
+
+  await supabaseFetch(config, `/rest/v1/guest_memories?id=eq.${encodeURIComponent(memoryId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "sent", updated_at: new Date().toISOString() })
+  });
+
+  return { ok: true, message: "Memory email sent." };
+}
+
+async function buildGuestMemoryEmail({ booking, guest, memory }) {
+  const subject = `A Memory from Your Stay · ${booking.booking_code}`;
+  const guestName = guest.full_name;
+  const checkInDate = formatDateOnly(booking.start_at);
+  const checkOutDate = formatDateOnly(booking.end_at);
+  const personalMessage = (memory.memory_message || "").trim();
+
+  const cardRes = await fetch(memory.card_url);
+  if (!cardRes.ok) throw new Error("Could not load memory card image for email.");
+  const cardBase64 = Buffer.from(await cardRes.arrayBuffer()).toString("base64");
+
+  const text = [
+    `A Memory from Your Stay · ${booking.booking_code}`,
+    "",
+    `Dear ${guestName},`,
+    "",
+    "It was a privilege hosting you at The Resthouse Zamboanga.",
+    personalMessage || "We hope your time with us was everything you needed.",
+    "",
+    `Booking: ${booking.booking_code}`,
+    `Arrived:  ${checkInDate}`,
+    `Departed: ${checkOutDate}`,
+    "",
+    "With warmth,",
+    "The Resthouse Zamboanga",
+    `${contactPhone}  ·  ${replyTo}`,
+    resortLocation
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      @media only screen and (max-width: 640px) {
+        .trz-container { width: 100% !important; }
+        .trz-pad { padding-left: 18px !important; padding-right: 18px !important; }
+        .trz-stack { display: block !important; width: 100% !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:#ece7de;font-family:Georgia,'Times New Roman',serif;color:#17251c;">
+    <span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;">A memory from your stay at The Resthouse Zamboanga &mdash; ${escapeHtml(booking.booking_code)}.</span>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ece7de;border-collapse:collapse;">
+      <tr>
+        <td align="center" style="padding:24px 0 44px;">
+          <table role="presentation" class="trz-container" width="680" cellspacing="0" cellpadding="0" style="width:680px;max-width:680px;border-collapse:collapse;background:#fffaf3;">
+
+            <!-- BRAND HEADER -->
+            <tr>
+              <td class="trz-pad" style="background:#041109;padding:40px 40px 44px;border-radius:14px 14px 0 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr><td style="border-bottom:1px solid rgba(215,177,84,.4);padding-bottom:14px;">
+                    <span style="font-family:Arial,sans-serif;font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:#d7b154;">The Resthouse Zamboanga &nbsp;&middot;&nbsp; Zamboanga City, Philippines</span>
+                  </td></tr>
+                  <tr><td style="padding-top:24px;">
+                    <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#d7b154;">A Memory from Your Stay</p>
+                    <h1 style="margin:0 0 10px;font-size:36px;line-height:1.2;color:#ffffff;font-weight:700;">Thank you for creating beautiful memories with us.</h1>
+                    <p style="margin:0;font-size:17px;font-style:italic;color:#d7b154;line-height:1.4;">Thank you for choosing The Resthouse Zamboanga.</p>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- HERO MEMORY CARD IMAGE -->
+            <tr>
+              <td style="padding:0;line-height:0;font-size:0;">
+                <img src="cid:trz-memory-card" width="680" alt="Your Memory Card" style="display:block;width:100%;max-width:680px;height:auto;border:0;">
+              </td>
+            </tr>
+
+            <!-- STAY SUMMARY -->
+            <tr>
+              <td class="trz-pad" style="padding:24px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#06331e;border:1px solid rgba(215,177,84,.55);border-radius:14px;">
+                  <tr>
+                    <td colspan="2" style="padding:22px 28px 16px;border-bottom:1px solid rgba(255,255,255,.1);">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                        <tr>
+                          <td style="vertical-align:top;">
+                            <p style="margin:0 0 2px;font-style:italic;color:#c8dfc8;font-family:Arial,sans-serif;font-size:13px;">With warm regards,</p>
+                            <h2 style="margin:0;font-size:26px;line-height:1.1;color:#ffffff;">${escapeHtml(guestName)}</h2>
+                          </td>
+                          <td style="vertical-align:top;text-align:right;">
+                            <p style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#c8dfc8;">Booking</p>
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-left:auto;">
+                              <tr><td style="background:rgba(215,177,84,.18);border:1px solid #d7b154;border-radius:999px;padding:7px 18px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#f4d375;white-space:nowrap;">${escapeHtml(booking.booking_code)}</td></tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="trz-stack" width="50%" style="padding:18px 28px;border-right:1px solid rgba(255,255,255,.1);vertical-align:top;">
+                      <p style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d7b154;">Arrived</p>
+                      <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;line-height:1.2;">${escapeHtml(checkInDate)}</p>
+                    </td>
+                    <td class="trz-stack" width="50%" style="padding:18px 28px;vertical-align:top;">
+                      <p style="margin:0 0 5px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d7b154;">Departed</p>
+                      <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;line-height:1.2;">${escapeHtml(checkOutDate)}</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+
+            <!-- WARM MESSAGE -->
+            <tr>
+              <td class="trz-pad" style="padding:16px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e4ded3;border-radius:14px;">
+                  <tr><td style="padding:26px 30px;">
+                    <p style="margin:0 0 14px;font-size:19px;line-height:1.55;color:#17251c;">It was a privilege hosting you.</p>
+                    <p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:14px;line-height:1.75;color:#4e5b53;">We hope your time at The Resthouse Zamboanga gave you the rest and joy you deserved. Every stay matters deeply to us, and yours was no different.</p>
+                    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;line-height:1.75;color:#4e5b53;">This card is a small keepsake from your visit. We hope it brings back a smile whenever you see it.</p>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- CONTACT STRIP -->
+            <tr>
+              <td class="trz-pad" style="padding:14px 28px 0;background:#fffaf3;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#f4f0e8;border-radius:12px;">
+                  <tr>
+                    <td class="trz-stack" width="33%" style="padding:15px 18px;border-right:1px solid #e6ded0;vertical-align:top;">
+                      <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9aaa9e;">Phone</p>
+                      <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#17251c;">${escapeHtml(contactPhone)}</p>
+                    </td>
+                    <td class="trz-stack" width="33%" style="padding:15px 18px;border-right:1px solid #e6ded0;vertical-align:top;">
+                      <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9aaa9e;">Email</p>
+                      <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#17251c;">${escapeHtml(replyTo)}</p>
+                    </td>
+                    <td class="trz-stack" width="33%" style="padding:15px 18px;vertical-align:top;">
+                      <p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9aaa9e;">Address</p>
+                      <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#4e5b53;">${escapeHtml(resortLocation)}</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- FOOTER -->
+            <tr>
+              <td class="trz-pad" style="padding:32px 40px 30px;background:#041109;border-radius:0 0 14px 14px;margin-top:28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                  <tr><td style="padding-bottom:18px;border-bottom:1px solid rgba(215,177,84,.35);text-align:center;">
+                    <img src="cid:trz-logo" width="220" alt="The Resthouse Zamboanga" style="display:block;margin:0 auto;width:220px;max-width:220px;height:auto;border:0;">
+                  </td></tr>
+                  <tr><td style="padding-top:18px;text-align:center;font-family:Arial,sans-serif;font-size:13px;line-height:1.8;color:#c8dfc8;">
+                    We hope to welcome you back soon.<br>
+                    <span style="color:#7a8a7e;font-size:12px;">${escapeHtml(contactPhone)} &nbsp;&middot;&nbsp; ${escapeHtml(replyTo)}</span>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text, attachments: await memoryCardAttachments(cardBase64) };
+}
+
+async function memoryCardAttachments(cardBase64) {
+  const logoBytes = await readFile(new URL("./assets/logo.png", import.meta.url));
+  return [
+    { filename: "memory-card.jpg", content: cardBase64, content_id: "trz-memory-card" },
+    { filename: "logo.png", content: logoBytes.toString("base64"), content_id: "trz-logo" }
+  ];
+}

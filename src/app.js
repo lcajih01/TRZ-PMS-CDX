@@ -15,6 +15,7 @@ import {
   insert,
   rpc,
   select,
+  supabaseConfig,
   update,
   walletBalance
 } from "./supabase.js";
@@ -54,6 +55,7 @@ let autoRefreshTimer = null;
 let stateFingerprint = "";
 let postStaySendConfirmId = null;
 let autoSending = false;
+let guestMemoryDraft = null;
 
 const AUTO_REFRESH_MS = 10000;
 const AUTO_SEND_CHECK_MS = 60000;
@@ -126,6 +128,7 @@ async function fetchAppState() {
     electricity_readings,
     owner_harvests,
     automation_queue,
+    guest_memories,
     audit_logs
   ] = await Promise.all([
     select("packages", { order: "order=name.asc" }),
@@ -145,6 +148,7 @@ async function fetchAppState() {
     safeSelect("electricity_readings", { order: "order=reading_date.desc" }),
     safeSelect("owner_harvests", { order: "order=harvest_date.desc" }),
     safeSelect("automation_queue", { order: "order=created_at.desc" }),
+    safeSelect("guest_memories", { order: "order=created_at.desc" }),
     select("audit_logs", { order: "order=created_at.desc" })
   ]);
 
@@ -166,6 +170,7 @@ async function fetchAppState() {
     electricity_readings,
     owner_harvests,
     automation_queue,
+    guest_memories,
     audit_logs
   };
 }
@@ -246,6 +251,7 @@ function emptyState() {
     electricity_readings: [],
     owner_harvests: [],
     automation_queue: [],
+    guest_memories: [],
     audit_logs: []
   };
 }
@@ -1683,6 +1689,13 @@ function bookingActionModal(context) {
           ${bookingAutomationSection(booking)}
         </div>
 
+        <!-- Guest Memories: Manager View + Completed only -->
+        ${booking.status === "Completed" && isManagerViewUnlocked() ? `
+        <div class="subsection">
+          <h3>Guest Memories</h3>
+          ${guestMemoriesSection(booking)}
+        </div>` : ""}
+
         <!-- Sticky action buttons -->
         <div class="bm-sticky-actions">
           ${actions.map((action) => `<button type="button" ${action.disabled ? "disabled" : ""} class="${action.id === "cancel" ? "danger" : ""}" data-booking-id="${booking.id}" data-booking-action="${action.id}">${action.label}</button>`).join("")}
@@ -2084,6 +2097,7 @@ function bindForms() {
   bindBookingNavButtons();
   bindQuickBookingPopup();
   bindPostStayEmail();
+  bindGuestMemory();
   renderFloatingActions();
   document.querySelectorAll("form[data-action]").forEach((form) => {
     if (form.dataset.action === "unlock") return;
@@ -2619,6 +2633,7 @@ function closeAllModals() {
   checkinPayment = null;
   checkoutSettlement = null;
   postStaySendConfirmId = null;
+  guestMemoryDraft = null;
 }
 
 async function confirmBookingWithDeposit(fields) {
@@ -4105,4 +4120,262 @@ async function autoSendScheduledEmails() {
   } finally {
     autoSending = false;
   }
+}
+
+// ── Phase 6C: Guest Memories ──────────────────────────────────────
+
+function guestMemoriesSection(booking) {
+  const isDraft = guestMemoryDraft?.bookingId === booking.id;
+  const record = state.guest_memories.find((r) => r.booking_id === booking.id);
+
+  if (isDraft && guestMemoryDraft.cardDataUrl) {
+    return `
+      <div class="gm-section">
+        <div class="gm-header">
+          <span class="gm-label">Memory Card</span>
+          <span class="pill gm-pill-draft">Preview</span>
+        </div>
+        <div class="gm-preview-wrap">
+          <img class="gm-preview-img" src="${escapeHtml(guestMemoryDraft.cardDataUrl)}" alt="Memory card preview">
+        </div>
+        <div class="actions">
+          <button type="button" class="primary" data-gm-save="${escapeHtml(booking.id)}">Save Memory Card</button>
+          <button type="button" data-gm-discard>Discard Draft</button>
+        </div>
+      </div>`;
+  }
+
+  if (isDraft && !guestMemoryDraft.cardDataUrl) {
+    return `
+      <div class="gm-section">
+        <div class="gm-header">
+          <span class="gm-label">Memory Card</span>
+          ${record ? `<span class="pill gm-pill-draft">Replacing</span>` : ""}
+        </div>
+        <p class="muted" style="margin:0 0 12px;font-size:13px;">Upload the finished Canva memory card.</p>
+        <div class="gm-upload-zone">
+          <label class="gm-upload-label" for="gm-photo-input">
+            <span>Click to choose a finished card</span>
+            <span style="display:block;font-size:11px;margin-top:4px;color:#5a7a6a;">JPEG · PNG · WebP · Max 10 MB</span>
+          </label>
+          <input type="file" id="gm-photo-input" class="gm-file-input" accept="image/jpeg,image/png,image/webp" data-gm-booking="${escapeHtml(booking.id)}">
+        </div>
+        <div class="actions">${record ? `<button type="button" data-gm-discard>Cancel</button>` : ""}</div>
+      </div>`;
+  }
+
+  if (record) {
+    const savedDate = record.updated_at
+      ? new Date(record.updated_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+      : "";
+    const isSent = record.status === "sent";
+    const gmGuest = state.guests.find((g) => g.id === booking.guest_id);
+    const hasEmail = !!((gmGuest && gmGuest.email) || "").trim();
+    const pillClass = isSent ? "gm-pill-sent" : "gm-pill-ready";
+    const pillLabel = isSent ? "sent" : "ready";
+    const savedSpan = savedDate ? "<span>Saved " + escapeHtml(savedDate) + "</span>" : "";
+    const readySpan = !isSent ? "<span>Uploaded Canva card</span>" : "";
+    const noEmailNote = hasEmail ? "" : "<p class=\"gm-no-email\">No email address on file for this guest.</p>";
+    const canSend = hasEmail && !!record.card_url;
+    const sendBtn = isSent
+      ? "<button type=\"button\" disabled>Memory Email Sent</button>"
+      : "<button type=\"button\" class=\"primary\" data-gm-send-email=\"" + escapeHtml(record.id) + "\"" + (canSend ? "" : " disabled") + ">Send Memory Email</button>";
+    return `
+      <div class="gm-section">
+        <div class="gm-header">
+          <span class="gm-label">Memory Card</span>
+          <span class="pill ${pillClass}">${pillLabel}</span>
+        </div>
+        <div class="gm-saved-wrap">
+          <img class="gm-thumb" src="${escapeHtml(record.card_url || "")}" alt="Saved memory card">
+        </div>
+        <div class="gm-meta">
+          ${readySpan}
+          ${savedSpan}
+        </div>
+        ${noEmailNote}
+        <div class="actions">
+          ${sendBtn}
+          <button type="button" data-gm-replace="${escapeHtml(booking.id)}">Replace Memory Card</button>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="gm-section">
+      <p class="muted" style="margin:0 0 12px;font-size:13px;">Upload the finished Canva memory card exported as JPG, PNG, or WebP.</p>
+      <div class="gm-upload-zone">
+        <label class="gm-upload-label" for="gm-photo-input">
+          <span>Upload Memory Card</span>
+          <span style="display:block;font-size:11px;margin-top:4px;color:#5a7a6a;">JPEG · PNG · WebP · Max 10 MB</span>
+        </label>
+        <input type="file" id="gm-photo-input" class="gm-file-input" accept="image/jpeg,image/png,image/webp" data-gm-booking="${escapeHtml(booking.id)}">
+      </div>
+    </div>`;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read memory card."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function validateMemoryCardFile(file) {
+  if (!file) throw new Error("Choose a finished memory card first.");
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error("Memory card must be JPG, PNG, or WebP.");
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Memory card must be 10 MB or smaller.");
+  }
+}
+
+function memoryCardExtension(file) {
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  return "jpg";
+}
+
+async function storageUpload(path, blob, contentType) {
+  const { url, anonKey } = supabaseConfig;
+  const response = await fetch(`${url}/storage/v1/object/guest-memories/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      "Content-Type": contentType,
+      "x-upsert": "true"
+    },
+    body: blob
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Storage upload failed: ${text || response.statusText}`);
+  }
+  return `${url}/storage/v1/object/public/guest-memories/${path}`;
+}
+
+async function saveGuestMemory(booking) {
+  if (!guestMemoryDraft?.cardFile) throw new Error("Upload a finished memory card first.");
+  validateMemoryCardFile(guestMemoryDraft.cardFile);
+
+  const ext = memoryCardExtension(guestMemoryDraft.cardFile);
+  const cardUrl = await storageUpload(
+    `${booking.id}/card-${Date.now()}.${ext}`,
+    guestMemoryDraft.cardFile,
+    guestMemoryDraft.cardFile.type || "image/jpeg"
+  );
+
+  const existing = state.guest_memories.find((r) => r.booking_id === booking.id);
+  const now = new Date().toISOString();
+  const payload = {
+    booking_id: booking.id,
+    photo_url: null,
+    card_url: cardUrl,
+    template_version: "canva",
+    memory_message: null,
+    status: "generated",
+    updated_at: now
+  };
+
+  if (existing) {
+    await update("guest_memories", existing.id, payload);
+  } else {
+    await insert("guest_memories", { ...payload, created_at: now });
+  }
+
+  guestMemoryDraft = null;
+  await loadData();
+  showMessage("Memory card uploaded and ready.", "success");
+}
+
+function bindGuestMemory() {
+  // File input -> local preview -> save the finished Canva card as-is.
+  document.querySelectorAll("[data-gm-booking]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const bookingId = input.dataset.gmBooking;
+      const file = input.files?.[0];
+      if (!file) return;
+
+      guestMemoryDraft = {
+        bookingId,
+        cardFile: file,
+        cardDataUrl: null
+      };
+
+      try {
+        validateMemoryCardFile(file);
+        guestMemoryDraft.cardDataUrl = await readFileAsDataUrl(file);
+        render();
+      } catch (err) {
+        guestMemoryDraft = null;
+        render();
+        showMessage(`Preview failed: ${err.message}`, "error");
+      }
+    });
+  });
+
+  // Save memory card
+  document.querySelectorAll("[data-gm-save]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const bookingId = btn.dataset.gmSave;
+      const booking = state.bookings.find((b) => b.id === bookingId);
+      if (!booking) return;
+      btn.disabled = true;
+      try {
+        await saveGuestMemory(booking);
+      } catch (err) {
+        btn.disabled = false;
+        showMessage(err.message, "error");
+      }
+    });
+  });
+
+  // Discard draft
+  document.querySelectorAll("[data-gm-discard]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      guestMemoryDraft = null;
+      render();
+    });
+  });
+
+  // Replace existing card
+  document.querySelectorAll("[data-gm-replace]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      guestMemoryDraft = {
+        bookingId: btn.dataset.gmReplace,
+        cardFile: null,
+        cardDataUrl: null
+      };
+      render();
+    });
+  });
+
+  // Send memory email
+  document.querySelectorAll("[data-gm-send-email]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const memoryId = btn.dataset.gmSendEmail;
+      if (!memoryId) return;
+      if (!confirm("Send the memory card email to this guest?")) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/memory/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ memory_id: memoryId })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Email send failed.");
+        showMessage("Memory email sent.", "success");
+        await loadData();
+      } catch (err) {
+        btn.disabled = false;
+        showMessage(err.message, "error");
+      }
+    });
+  });
 }

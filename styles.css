@@ -1345,6 +1345,107 @@ button.booking-card:hover:not(:disabled) { border-color: rgba(214,183,100,0.22);
 .ps-pill-skipped{ background: rgba(156,163,175,0.15); color: #9ca3af; border: 1px solid rgba(156,163,175,0.3);  }
 .ps-pill-pending{ background: rgba(251,191,36,0.2);   color: #fbbf24; border: 1px solid rgba(251,191,36,0.45); }
 
+/* ─── Guest Memories Section (Phase 6C) ─────────────────────────── */
+
+.gm-section {
+  margin-top: 14px;
+  padding: 16px 18px;
+  background: #06331e;
+  border: 1px solid rgba(215,177,84,0.5);
+  border-radius: 10px;
+  color: #e8f4e8;
+}
+
+.gm-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.gm-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #9ab8a0;
+}
+
+.gm-upload-zone {
+  border: 2px dashed rgba(215,177,84,0.4);
+  border-radius: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: border-color 0.15s;
+}
+
+.gm-upload-zone:hover { border-color: rgba(215,177,84,0.75); }
+
+.gm-upload-label {
+  display: block;
+  cursor: pointer;
+  font-size: 14px;
+  color: #9ab8a0;
+}
+
+.gm-upload-label:hover { color: #d7b154; }
+
+.gm-file-input { display: none; }
+
+.gm-preview-wrap {
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.gm-preview-img {
+  max-width: 100%;
+  max-height: 380px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(215,177,84,0.3);
+  display: block;
+  margin: 0 auto;
+}
+
+.gm-saved-wrap {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.gm-thumb {
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(215,177,84,0.3);
+  display: block;
+  margin: 0 auto;
+}
+
+.gm-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  color: #9ab8a0;
+  margin-bottom: 10px;
+}
+
+.gm-pill-draft    { background: rgba(59,130,246,0.18);  color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); }
+.gm-pill-ready    { background: rgba(74,222,128,0.18);  color: #4ade80; border: 1px solid rgba(74,222,128,0.4); }
+.gm-pill-sent     { background: rgba(215,177,84,0.18);  color: #d7b154; border: 1px solid rgba(215,177,84,0.4); }
+
+.gm-no-email {
+  margin: 0 0 10px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  color: #f87171;
+}
+
 /* ─── Reduced Motion ─────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

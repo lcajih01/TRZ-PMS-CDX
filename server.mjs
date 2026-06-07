@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sendAutomationEmail } from "./email/resend.mjs";
+import { sendAutomationEmail, sendGuestMemoryEmail } from "./email/resend.mjs";
 
 const port = Number(process.env.PORT || 5173);
 const root = fileURLToPath(new URL(".", import.meta.url));
@@ -25,6 +25,22 @@ const types = {
 createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://localhost:${port}`);
   const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+
+  if (req.method === "POST" && url.pathname === "/api/memory/send") {
+    let payload = {};
+    try {
+      payload = await readJson(req);
+      const result = await sendGuestMemoryEmail({ memoryId: payload.memory_id, env });
+      sendJson(res, 200, result);
+    } catch (error) {
+      console.error("[memory/send]", {
+        memory_id: payload.memory_id || null,
+        error: error.message
+      });
+      sendJson(res, 500, { ok: false, error: error.message });
+    }
+    return;
+  }
 
   if (req.method === "POST" && url.pathname === "/api/automation/send") {
     let payload = {};
