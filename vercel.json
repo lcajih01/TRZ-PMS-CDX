@@ -1,7 +1,42 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
   "rewrites": [
     {
-      "source": "/((?!api/|booking-request\\.html$|booking-request\\.css$|src/booking-request\\.js$|env\\.js$|email/assets/|icons/).*)",
+      "source": "/api/automation/send",
+      "destination": "/api/automation/send"
+    },
+    {
+      "source": "/api/memory/send",
+      "destination": "/api/memory/send"
+    },
+    {
+      "source": "/booking-request.html",
+      "destination": "/booking-request.html"
+    },
+    {
+      "source": "/booking-request.css",
+      "destination": "/booking-request.css"
+    },
+    {
+      "source": "/src/booking-request.js",
+      "destination": "/src/booking-request.js"
+    },
+    {
+      "source": "/env.js",
+      "destination": "/env.js"
+    },
+    {
+      "source": "/email/assets/:path*",
+      "destination": "/email/assets/:path*"
+    },
+    {
+      "source": "/icons/:path*",
+      "destination": "/icons/:path*"
+    },
+    {
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ]

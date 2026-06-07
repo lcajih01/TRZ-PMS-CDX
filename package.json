@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.mjs",
     "build": "node build.mjs",
+    "verify:build-output": "node tests/verify-build-output.mjs",
     "test": "node tests/phase1.test.mjs && node tests/persistence-boundary.test.mjs"
   }
 }
