@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
+    "build": "node build.mjs",
     "test": "node tests/phase1.test.mjs && node tests/persistence-boundary.test.mjs"
   }
 }
