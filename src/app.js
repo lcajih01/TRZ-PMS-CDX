@@ -8,7 +8,8 @@ import {
   drinkProductMetrics,
   filterLedgerLines,
   financeSummary,
-  money
+  money,
+  overnightOccupiedDateKeys
 } from "./core.js";
 import {
   hasSupabaseConfig,
@@ -567,10 +568,7 @@ function calDayStatusClass(status) {
 }
 
 function calendarDay(day) {
-  // Only show a booking on its start date — end/checkout dates render as Available.
-  const segments = calendarSegmentsForDay(day).filter(
-    (s) => sameLocalDate(new Date(s.booking.start_at), day)
-  );
+  const segments = calendarSegmentsForDay(day);
   const isToday = sameLocalDate(day, new Date());
   const todayClass = isToday ? " today" : "";
   const dateStr = dateInputValue(day);
@@ -589,7 +587,7 @@ function calendarDay(day) {
   const statusClass = calDayStatusClass(booking.status);
   const guestName = guestNameText(booking.guest_id);
   const ref = shortBookingCode(booking.booking_code);
-  const statusLabel = shortCalendarStatus(booking.status);
+  const statusLabel = shortCalendarStatus(primarySeg.label);
   const fullLabel = `${guestName} · ${booking.booking_code} · ${booking.status}`;
 
   return `
@@ -621,6 +619,7 @@ function shortCalendarStatus(label) {
 }
 
 function calendarSegmentsForDay(day) {
+  const dayKey = dateInputValue(day);
   const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
   const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 0, 0, 0);
   const segments = state.bookings.filter((booking) => {
@@ -631,6 +630,7 @@ function calendarSegmentsForDay(day) {
     const end = new Date(booking.end_at);
     const startsToday = sameLocalDate(start, day);
     const endsToday = sameLocalDate(end, day);
+    const isOvernightOccupiedDay = overnightOccupiedDateKeys(booking.start_at, booking.end_at).includes(dayKey);
     let kind = "reserved";
     let label = booking.status;
     const futureHoldStatus = ["Inquiry", "Tentative", "Deposit Requested", "Deposit Received", "Confirmed"].includes(booking.status);
@@ -647,7 +647,7 @@ function calendarSegmentsForDay(day) {
     } else if (endsToday) {
       kind = "checkout";
       label = `${booking.status} Check-Out`;
-    } else if (occupiedStatus) {
+    } else if (occupiedStatus || isOvernightOccupiedDay) {
       kind = "occupied";
       label = "Occupied";
     } else if (futureHoldStatus) {

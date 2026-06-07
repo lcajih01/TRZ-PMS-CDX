@@ -988,6 +988,21 @@ export function rangesOverlap(aStart, aEnd, bStart, bEnd) {
   return new Date(aStart) < new Date(bEnd) && new Date(aEnd) > new Date(bStart);
 }
 
+export function overnightOccupiedDateKeys(startAt, endAt) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return [];
+
+  const keys = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const checkoutDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor < checkoutDay) {
+    keys.push(dateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+}
+
 function nextBookingCode(state, startAt) {
   const year = new Date(startAt).getFullYear();
   state.booking_counters[year] = Number(state.booking_counters[year] || 0) + 1;

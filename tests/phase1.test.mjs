@@ -17,6 +17,7 @@ import {
   filterLedgerLines,
   financeSummary,
   latestPackageVersion,
+  overnightOccupiedDateKeys,
   recordDailyClosing,
   recordDrinkInventoryMovement,
   recordDrinkSale,
@@ -122,6 +123,18 @@ const multiNightBooking = createBooking(
 
 assert.equal(calculateBasePrice(standardVersion, multiNightBooking.start_at, multiNightBooking.end_at), 60000);
 assert.equal(multiNightBooking.base_price, 60000);
+assert.deepEqual(
+  overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-18T12:00:00.000Z"),
+  ["2026-06-17"]
+);
+assert.deepEqual(
+  overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-19T12:00:00.000Z"),
+  ["2026-06-17", "2026-06-18"]
+);
+assert.deepEqual(
+  overnightOccupiedDateKeys("2026-06-17T15:00:00.000Z", "2026-06-20T12:00:00.000Z"),
+  ["2026-06-17", "2026-06-18", "2026-06-19"]
+);
 
 const completedMultiNight = completeCheckoutSettlement(state, multiNightBooking.id, manager);
 assert.equal(completedMultiNight.status, "Completed");

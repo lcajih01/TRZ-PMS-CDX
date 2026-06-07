@@ -289,6 +289,8 @@ assert.ok(app.includes("DELETE ${booking.booking_code}"), "Delete Booking must r
 assert.ok(app.includes("data-calendar-nav=\"prev\""), "calendar must support previous month navigation");
 assert.ok(app.includes("data-calendar-nav=\"next\""), "calendar must support next month navigation");
 assert.ok(app.includes("data-calendar-nav=\"today\""), "calendar must support today navigation");
+assert.ok(app.includes("overnightOccupiedDateKeys"), "calendar must use overnight occupied date keys");
+assert.ok(!app.includes("Only show a booking on its start date"), "calendar must not hide middle overnight dates");
 assert.ok(app.includes("Record Expense"), "finance must support expense entry");
 assert.ok(app.includes("data-action=\"transfer\""), "finance must support wallet transfers");
 assert.ok(app.includes("Void/Reversal"), "transactions must support reversal action");
