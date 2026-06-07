@@ -9,7 +9,10 @@ const indexHtml = await readFile(new URL("../index.html", import.meta.url), "utf
 const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const supabase = await readFile(new URL("../src/supabase.js", import.meta.url), "utf8");
 const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
+const automationApi = await readFile(new URL("../api/automation/send.js", import.meta.url), "utf8");
+const memoryApi = await readFile(new URL("../api/memory/send.js", import.meta.url), "utf8");
 const resendHelper = await readFile(new URL("../email/resend.mjs", import.meta.url), "utf8");
+const vercelConfig = await readFile(new URL("../vercel.json", import.meta.url), "utf8");
 const manifest = await readFile(new URL("../manifest.webmanifest", import.meta.url), "utf8");
 const serviceWorker = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 const manifestData = JSON.parse(manifest);
@@ -45,6 +48,10 @@ assert.ok(!app.includes("trz-pms-phase1-state"), "business records must not be s
 assert.ok(!app.includes("createInitialState"), "browser app must not seed local business records");
 assert.ok(app.includes("verify_pms_access_code"), "app must unlock through the PMS access code RPC");
 assert.ok(app.includes("change_manager_security_code"), "app must change manager code through RPC");
+assert.ok(app.includes('localStorage.setItem(accessSessionKey, "true")'), "PMS access unlock must persist in localStorage");
+assert.ok(app.includes('localStorage.getItem(accessSessionKey) === "true"'), "PMS access must restore from localStorage on reload");
+assert.ok(app.includes("localStorage.removeItem(accessSessionKey)"), "PMS Lock button must clear persisted access");
+assert.ok(!app.includes("sessionStorage.setItem(accessSessionKey"), "PMS access must not be session-only");
 assert.ok(app.includes("trz-manager-view-unlocked"), "Manager View must use browser session-only visibility state");
 assert.ok(app.includes("unlock-manager-view"), "Manager View must have a discreet unlock control");
 assert.ok(app.includes("Normal View is active"), "Normal View must be the default finance visibility mode");
@@ -108,6 +115,11 @@ assert.ok(serviceWorker.includes("booking creation, payments, deposits, finance 
 assert.ok(server.includes("/api/automation/send"), "server must expose automation send endpoint");
 assert.ok(server.includes("sendAutomationEmail"), "server must call Resend email helper");
 assert.ok(server.includes("[automation/send]"), "automation send endpoint must log readable failures");
+assert.ok(server.includes("sendJson(res, 500"), "local email API errors must return JSON");
+assert.ok(automationApi.includes("sendJson(res, 200") && automationApi.includes("sendJson(res, 500"), "Vercel automation API must always return JSON");
+assert.ok(memoryApi.includes("sendJson(res, 200") && memoryApi.includes("sendJson(res, 500"), "Vercel memory API must always return JSON");
+assert.ok(automationApi.includes("process.env") && memoryApi.includes("process.env"), "Vercel email APIs must use server-side environment variables");
+assert.ok(vercelConfig.includes("((?!api/).*"), "Vercel SPA rewrite must not swallow /api routes");
 assert.ok(!server.includes("RESEND_API_KEY:"), "server must not expose RESEND_API_KEY through env.js");
 assert.ok(resendHelper.includes("RESEND_API_KEY"), "Resend helper must use RESEND_API_KEY");
 assert.ok(resendHelper.includes("The Resthouse Zamboanga <bookings@theresthousezamboanga.com>"), "Resend sender must use TRZ display name and verified domain");
@@ -221,8 +233,11 @@ assert.ok(app.includes("queue_booking_automation"), "Booking modal must use queu
 assert.ok(app.includes("Ready to send"), "Due pending automation items must show ready to send");
 assert.ok(app.includes('fetch("/api/automation/send"'), "Automation queue must call local send endpoint");
 assert.ok(app.includes("markAutomationFailed"), "Automation send failures must update queue status to failed");
+assert.ok(app.includes("readEmailApiResponse"), "Frontend email sends must use safe response parsing");
 assert.ok(app.includes("Email server unreachable"), "Automation send failures must show local server connection errors");
 assert.ok(app.includes("Email server returned an unreadable response"), "Automation send failures must show non-JSON endpoint errors");
+assert.ok(app.includes("Email server returned an empty response"), "Automation send failures must show empty endpoint responses");
+assert.ok(!app.includes("await res.json()"), "Frontend email sends must not crash on empty or non-JSON API responses");
 assert.ok(app.includes("Send Email"), "Automation queue must expose real send action");
 assert.ok(app.includes("Send Confirmation Email"), "Booking modal must expose real confirmation send action");
 assert.ok(!app.includes("Send Check-in Reminder"), "Booking modal must not expose check-in reminder send action");

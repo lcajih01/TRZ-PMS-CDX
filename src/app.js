@@ -303,7 +303,7 @@ function renderShell() {
     : `<span>Locked</span>`;
   badge.querySelector("[data-action='unlock-manager-view']")?.addEventListener("click", unlockManagerView);
   badge.querySelector("[data-action='lock']")?.addEventListener("click", () => {
-    sessionStorage.removeItem(accessSessionKey);
+    localStorage.removeItem(accessSessionKey);
     sessionStorage.removeItem(managerViewSessionKey);
     securityUnlocked = false;
     createBookingContext = null;
@@ -2036,7 +2036,7 @@ function bindAccessForms() {
         throw new Error("Wrong PMS Access Code.");
       }
       resetAttempts(pmsAttemptsKey);
-      sessionStorage.setItem(accessSessionKey, "true");
+      localStorage.setItem(accessSessionKey, "true");
       await loadData();
       startAutoRefresh();
     } catch (error) {
@@ -2953,15 +2953,7 @@ async function sendQueuedEmail(id) {
     throw new Error(reason);
   }
 
-  const raw = await response.text();
-  let data = null;
-  try {
-    data = raw ? JSON.parse(raw) : null;
-  } catch {
-    const reason = `Email server returned an unreadable response: ${raw.slice(0, 180) || response.statusText}`;
-    await markAutomationFailed(id, reason);
-    throw new Error(reason);
-  }
+  const data = await readEmailApiResponse(response);
 
   if (!response.ok || data?.ok === false) {
     const reason = data?.error || response.statusText || "Email sending failed.";
@@ -2969,6 +2961,26 @@ async function sendQueuedEmail(id) {
     throw new Error(reason);
   }
   return data;
+}
+
+async function readEmailApiResponse(response) {
+  const raw = await response.text();
+  if (!raw) {
+    return {
+      ok: false,
+      error: response.ok
+        ? "Email server returned an empty response."
+        : `Email server returned an empty response (${response.status}).`
+    };
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {
+      ok: false,
+      error: `Email server returned an unreadable response: ${raw.slice(0, 180) || response.statusText}`
+    };
+  }
 }
 
 async function markAutomationFailed(id, reason) {
@@ -3231,7 +3243,7 @@ async function createAudit(entity_type, entity_id, action, before_data, after_da
 }
 
 function isAccessUnlocked() {
-  return sessionStorage.getItem(accessSessionKey) === "true";
+  return localStorage.getItem(accessSessionKey) === "true";
 }
 
 function isManagerViewUnlocked() {
@@ -4368,8 +4380,8 @@ function bindGuestMemory() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ memory_id: memoryId })
         });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "Email send failed.");
+        const data = await readEmailApiResponse(res);
+        if (!res.ok || data?.ok === false) throw new Error(data?.error || "Email send failed.");
         showMessage("Memory email sent.", "success");
         await loadData();
       } catch (err) {
